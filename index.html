@@ -217,7 +217,8 @@
   .mbtn:hover:not(:disabled)::before, .mbtn:focus-visible::before { transform: translateY(-50%) scale(1); }
   .mbtn:hover:not(:disabled)::after, .mbtn:focus-visible::after { transform: scaleX(1); }
   .mbtn:disabled { color: #6b5d48; cursor: default; text-shadow: none; }
-  .mmenu .mver { position: absolute; right: max(10px, 1.6cqw); bottom: max(8px, 1.4cqh); margin: 0; font: 400 12px var(--label); letter-spacing: .14em; color: #8f7f62; opacity: .8; pointer-events: none; text-shadow: 0 1px 3px #000; }
+  .mmenu .mver { position: absolute; right: max(10px, 1.6cqw); bottom: max(8px, 1.4cqh); margin: 0; font: 400 12px var(--label); letter-spacing: .14em; color: #8f7f62; opacity: .8; cursor: pointer; text-shadow: 0 1px 3px #000; }
+  .mmenu .mver:hover { opacity: 1; color: #c9b183; }
   .mmenu .merr { position: absolute; right: max(10px, 1.6cqw); bottom: calc(max(8px, 1.4cqh) + 18px); margin: 0; max-width: 46cqw; font: 400 11px/1.3 ui-monospace, Menlo, monospace; color: #c98a6a; opacity: .85; text-align: right; pointer-events: none; text-shadow: 0 1px 3px #000; }
   .mmenu .msave { margin: -10px 0 0 30px; font-size: 12.5px; color: #9c8a6c; font-style: italic; min-height: 1em; }
   .mmenu .mq { margin: 0 0 0 30px; font: 400 20px var(--label); letter-spacing: .06em; color: #e6d2a6; }
@@ -2087,11 +2088,23 @@
     return true;
   }
   let glOK = false, glLost = false;
+  // (v730) light graphics mode: fewer pixels and no glow passes, for GPUs that drop the game
+  const LIGHTGL = (() => { try { return localStorage.getItem('glyph.lightGL') === '1'; } catch (e) { return false; } })();
   if (GL) { try { glInit(); glOK = true; } catch (e) { console.warn('WebGL setup failed, using the slower renderer', e); } }
   // the graphics driver can drop the WebGL context (a GPU reset, the tab put to sleep, a driver hiccup): the browser then shows
   // a blank canvas. Ask for it back, and when it returns rebuild the shader, textures and glyph atlas and carry on.
-  cv.addEventListener('webglcontextlost', e => { e.preventDefault(); glLost = true; console.warn('WebGL context lost; waiting for it to come back'); });
+  cv.addEventListener('webglcontextlost', e => { e.preventDefault(); glLost = true; console.warn('WebGL context lost; waiting for it to come back');
+    try { noteErr(new Error('WebGL context lost' + (LIGHTGL ? ' (light mode)' : '')), 'webgl ' + state); } catch (_) {}
+    setTimeout(() => { if (!glLost) return; glLostRecover(); }, 2000); });
   cv.addEventListener('webglcontextrestored', () => { try { glInit(); glLost = false; glOK = true; resize(); } catch (e) { console.warn('WebGL restore failed', e); } });
+  function glLostRecover() {   // (v730) the GPU did not give the frame back: go to light mode, by reloading
+    try { localStorage.setItem('glyph.lightGL', '1'); } catch (_) {}
+    if (state === 'menu' || state === 'create') { location.reload(); return; }
+    if (document.getElementById('glLostCard')) return; const d = document.createElement('div'); d.id = 'glLostCard';
+    d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(6,4,2,.85);color:#e8d29a;font:16px/1.5 Georgia,serif;text-align:center';
+    d.innerHTML = '<div><p>' + (LIGHTGL ? 'The graphics card dropped the game again, even in light mode.<br>Chrome may run it better on this computer.' : 'The graphics card dropped the game.<br>It will restart in light graphics mode.') + '</p><button style="font:inherit;padding:8px 18px;margin-top:10px;background:#2a1d10;color:#f2c879;border:1px solid #7a5a2c;cursor:pointer">Reload</button></div>';
+    d.querySelector('button').onclick = () => location.reload(); document.body.appendChild(d);
+  }
   const vp = document.getElementById('vp');
   // (v598) a point on the page, in the frame's own pixels (the frame is scaled and moved as one piece)
 
@@ -2424,6 +2437,7 @@ o=]#########=>
   const CRT_MASKP = { lowest: 6, low: 5, medium: 4, high: 3, ultra: 3 };   // aperture grille: device pixels per red-green-blue stripe set
   const ASPECTS = SHAPES;
   let aspect = '16:9', crtAmt = .32, crtCurve = 1, CRT_DEPTH = false, cineAmt = .8, cineRelief = 1;
+  try { if (localStorage.getItem('glyph.lightGL') === '1') cineAmt = 0; } catch (_) {}   // (v730) light mode: no glow passes
   try { const a = localStorage.getItem('glyph.aspect'); if (a && a in ASPECTS) aspect = a;
     const v = localStorage.getItem('glyph.curve'); if (v !== null) crtCurve = v === '0' ? 0 : 1;
     } catch (e) {}   // (v697) the glass, the light and the raised letters are one look, not settings
@@ -2608,7 +2622,8 @@ o=]#########=>
     rows = g.rows; cols = g[aspect] || g['16:9'];
     // the drawing is made at the frame's size on the screen, in device pixels, so the letters stay sharp at any scale: the
     // grid never changes, only how many pixels a cell spans (a fraction is fine: each letter is taken nearest from its atlas)
-    const BW = Math.max(cols * 3, Math.round(vpW * fs * dpr)), BH = Math.max(rows * 5, Math.round(vpH * fs * dpr));
+    const lk = LIGHTGL ? .6 : 1;   // (v730) light mode: 60% of the pixels each way, scaled up
+    const BW = Math.max(cols * 3, Math.round(vpW * fs * dpr * lk)), BH = Math.max(rows * 5, Math.round(vpH * fs * dpr * lk));
     ACH = Math.max(5, Math.round(BH / rows)); ACW = Math.max(3, Math.round(ACH / 2));
     const fontDev = Math.max(5, Math.round(ACH / 1.18));
     ctx.font = `500 ${fontDev}px "Fira Mono", ui-monospace, Menlo, Consolas, monospace`;
@@ -29215,7 +29230,7 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
-  const GAME_VERSION = 'v729';   // (v728) shown in the main menu's corner
+  const GAME_VERSION = 'v730';   // (v728) shown in the main menu's corner
   // (v729) the last few errors, kept in this browser and shown under the version, so a player can read them out
   const ERRN = { list: (() => { try { return JSON.parse(localStorage.getItem('glyph.errs') || '[]'); } catch (e) { return []; } })() };
   function noteErr(err, where) { try { const m = (err && (err.message || err.reason && err.reason.message || err.reason) || String(err)).toString().slice(0, 160), st = err && err.stack ? String(err.stack).split('\n').find(l => /:\d+:\d+/.test(l)) || '' : '', at = (st.match(/:(\d+):(\d+)\)?\s*$/) || []).slice(1).join(':');
@@ -29236,10 +29251,11 @@ o=]#########=>
         <button class="mbtn" id="quitBtn">Quit Game</button>
       </nav>
       <p class="msave" id="saveNote"></p>
-      <p class="mver" aria-label="Game version">Glyphcrawl ${GAME_VERSION}</p>${errLine()}
+      <p class="mver" id="mver" role="button" tabindex="-1" title="Click to switch light graphics mode ${LIGHTGL ? 'off' : 'on'} (reloads)">Glyphcrawl ${GAME_VERSION}${LIGHTGL ? ' · light' : ''}</p>${errLine()}
       <label class="tmode"><input type="checkbox" id="testMode" ${testMode ? 'checked' : ''}> Test mode <span>start in a room of chests holding every item</span></label>
     </div>`;
     document.getElementById('newBtn').onclick = showCreate; setTimeout(campDb, 1500);   // (v684)
+    { const mv = document.getElementById('mver'); if (mv) mv.onclick = () => { try { localStorage.setItem('glyph.lightGL', LIGHTGL ? '' : '1'); } catch (_) {} location.reload(); }; }   // (v730)
     document.getElementById('setBtn').onclick = () => showSettings(showMenu);
     document.getElementById('quitBtn').onclick = confirmQuit;
     if (FONT_PICKER) document.getElementById('fontsBtn').onclick = () => showFonts(showMenu);
@@ -30618,6 +30634,7 @@ o=]#########=>
       <p class="muted">The run is over, and anything the Fairy kept is gone with it. Try again keeps your class in a fresh crypt. R also works.</p></div>`;
     document.getElementById('againBtn').onclick = retry;
     document.getElementById('newBtn').onclick = showCreate; setTimeout(campDb, 1500);   // (v684)
+    { const mv = document.getElementById('mver'); if (mv) mv.onclick = () => { try { localStorage.setItem('glyph.lightGL', LIGHTGL ? '' : '1'); } catch (_) {} location.reload(); }; }   // (v730)
     document.getElementById('titleBtn2').onclick = showMenu;
     document.getElementById('againBtn').focus();
   }
