@@ -1510,7 +1510,7 @@
     c.onclick = () => { const txt = t.textContent; (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => { c.textContent = 'Copied'; }, () => { const r = document.createRange(); r.selectNodeContents(t); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); c.textContent = 'Selected: press Cmd+C'; }); };
     const x = document.createElement('button'); x.textContent = 'Hide'; x.style.cssText = 'margin:6px 0 0 6px;font:12px sans-serif;cursor:pointer'; x.onclick = () => { b.hidden = true; };
     b.append(t, c, x); (document.body || document.documentElement).appendChild(b);
-    t.textContent = 'Glyphcrawl ' + BUILD + ' | ' + navigator.userAgent + ' | ' + innerWidth + 'x' + innerHeight + ' @' + (devicePixelRatio || 1) + '\n'; return b; };
+    t.textContent = 'Glyphcrawl ' + (() => { try { return window.__glyph.ev("GAME_VERSION + (LIGHTGL ? ' light' : '')"); } catch (_) { return BUILD + '?'; } })() + ' | ' + navigator.userAgent + ' | ' + innerWidth + 'x' + innerHeight + ' @' + (devicePixelRatio || 1) + ' | GPU ' + (window.__gpu || '?') + '\n'; return b; };
   const add = (kind, msg, stack) => { const key = kind + msg; if (seen.includes(key) || seen.length > 8) return; seen.push(key);
     const write = () => { const b = box(); b.hidden = false; const st = window.__glyph && window.__glyph.ev ? (() => { try { return window.__glyph.ev('state + (CAMP ? " camp " + CAMP.step + " " + CAMP.sel : "")'); } catch (_) { return '?'; } })() : '?';
       b.querySelector('#errRepT').textContent += '\n[' + kind + '] (' + st + ') ' + msg + (stack ? '\n  ' + String(stack).split('\n').slice(0, 4).join('\n  ') : ''); };
@@ -2090,6 +2090,7 @@
   let glOK = false, glLost = false;
   // (v730) light graphics mode: fewer pixels and no glow passes, for GPUs that drop the game
   const LIGHTGL = (() => { try { return localStorage.getItem('glyph.lightGL') === '1'; } catch (e) { return false; } })();
+  try { const x = GL && GL.getExtension('WEBGL_debug_renderer_info'); window.__gpu = GL ? (x ? GL.getParameter(x.UNMASKED_RENDERER_WEBGL) : GL.getParameter(GL.RENDERER)) : 'none (no WebGL)'; } catch (_) {}   // (v731) for the report
   if (GL) { try { glInit(); glOK = true; } catch (e) { console.warn('WebGL setup failed, using the slower renderer', e); } }
   // the graphics driver can drop the WebGL context (a GPU reset, the tab put to sleep, a driver hiccup): the browser then shows
   // a blank canvas. Ask for it back, and when it returns rebuild the shader, textures and glyph atlas and carry on.
@@ -2099,7 +2100,7 @@
   cv.addEventListener('webglcontextrestored', () => { try { glInit(); glLost = false; glOK = true; resize(); } catch (e) { console.warn('WebGL restore failed', e); } });
   function glLostRecover() {   // (v730) the GPU did not give the frame back: go to light mode, by reloading
     try { localStorage.setItem('glyph.lightGL', '1'); } catch (_) {}
-    if (state === 'menu' || state === 'create') { location.reload(); return; }
+    if (!LIGHTGL && (state === 'menu' || state === 'create')) { location.reload(); return; }   // (v731) once only: in light mode, the card
     if (document.getElementById('glLostCard')) return; const d = document.createElement('div'); d.id = 'glLostCard';
     d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(6,4,2,.85);color:#e8d29a;font:16px/1.5 Georgia,serif;text-align:center';
     d.innerHTML = '<div><p>' + (LIGHTGL ? 'The graphics card dropped the game again, even in light mode.<br>Chrome may run it better on this computer.' : 'The graphics card dropped the game.<br>It will restart in light graphics mode.') + '</p><button style="font:inherit;padding:8px 18px;margin-top:10px;background:#2a1d10;color:#f2c879;border:1px solid #7a5a2c;cursor:pointer">Reload</button></div>';
@@ -29230,7 +29231,7 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
-  const GAME_VERSION = 'v730';   // (v728) shown in the main menu's corner
+  const GAME_VERSION = 'v731';   // (v728) shown in the main menu's corner
   // (v729) the last few errors, kept in this browser and shown under the version, so a player can read them out
   const ERRN = { list: (() => { try { return JSON.parse(localStorage.getItem('glyph.errs') || '[]'); } catch (e) { return []; } })() };
   function noteErr(err, where) { try { const m = (err && (err.message || err.reason && err.reason.message || err.reason) || String(err)).toString().slice(0, 160), st = err && err.stack ? String(err.stack).split('\n').find(l => /:\d+:\d+/.test(l)) || '' : '', at = (st.match(/:(\d+):(\d+)\)?\s*$/) || []).slice(1).join(':');
