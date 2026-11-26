@@ -29253,7 +29253,7 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
-  const GAME_VERSION = 'v738';   // (v728) shown in the main menu's corner
+  const GAME_VERSION = 'v739';   // (v728) shown in the main menu's corner
   // (v729) the last few errors, kept in this browser and shown under the version, so a player can read them out
   const ERRN = { list: (() => { try { return JSON.parse(localStorage.getItem('glyph.errs') || '[]'); } catch (e) { return []; } })() };
   function noteErr(err, where) { try { const m = (err && (err.message || err.reason && err.reason.message || err.reason) || String(err)).toString().slice(0, 160), st = err && err.stack ? String(err.stack).split('\n').find(l => /:\d+:\d+/.test(l)) || '' : '', at = (st.match(/:(\d+):(\d+)\)?\s*$/) || []).slice(1).join(':');
@@ -31830,7 +31830,7 @@ o=]#########=>
     tr = 178 + h2(pr.hb, 31) * 12; tg = 164; tb = 134; return .2 + sn2(u * 2.6, hz * 2.6) * .05;
   }
   // (v736) a roof's slates and tiles averaged over the cell's footprint (2x2 and the centre), as the walls are
-  function roofSS(pr, u, w, sg, fp) { const b0 = roofSurf(pr, u, w, sg, fp); if (!SURF_BARE || fp < .05 || EMIT || b0 < 0) return b0;
+  function roofSS(pr, u, w, sg, fp) { const b0 = roofSurf(pr, u, w, sg, fp); if (true) return b0;   /* (v739) no supersampling */
     const d = Math.min(.4, fp * .8), r0 = tr, g0 = tg, l0 = tb; let sb = b0, sr = tr * b0, sgc = tg * b0, sl = tb * b0, n = 1;
     for (let k0 = 0; k0 < 2; k0++) { const k = k0 * 3; EMIT = false; const c = roofSurf(pr, u + (k & 1 ? d : -d), w + (k & 2 ? d : -d), sg, fp); if (c >= 0 && !EMIT) { sb += c; sr += tr * c; sgc += tg * c; sl += tb * c; n++; } }
     EMIT = false; if (sb > 1e-6) { tr = sr / sb; tg = sgc / sb; tb = sl / sb; } else { tr = r0; tg = g0; tb = l0; } return sb / n; }
@@ -38237,7 +38237,7 @@ o=]#########=>
           if (base < 0) { if ((G.tallH || G.cotK) && !PURG && (vv < .5 || SKYTHRU)) thru = true; else { base = .03; EMIT = false; } }
           if (!thru) {
             if (RF) PIXD[i] = perp; WALLX[y] = x;
-            if (SSW && SURF_BARE && !PANOHIT) { SSW = false; const fpw = perp * SPKW; if (fpw > .05) {   // (v736) the cell's footprint on the wall, sampled 2x2 and averaged
+            if (false && SSW && SURF_BARE && !PANOHIT) {   /* (v739) no supersampling */ SSW = false; const fpw = perp * SPKW; if (fpw > .05) {   // (v736) the cell's footprint on the wall, sampled 2x2 and averaged
               const dz = Math.min(.4, fpw / 1.2 * .25), du = Math.min(.4, dz * cellW / cellH), WH0 = WH, E0 = EMIT; let ne = 0, sb = base, sr = tr * base, sg = tg * base, sl = tb * base, sn = 1; const t0r = tr, t0g = tg, t0b = tb;   // (glass and its lead averaged together: glowing where most of it glows)
               const nq = 2; for (let q0 = 0; q0 < nq; q0++) { const q = nq === 2 ? q0 * 3 : q0, u2 = Math.min(.999, Math.max(.001, wx + (q & 1 ? du : -du))), vw2 = Math.max(0, vw + (q & 2 ? dz : -dz)), ly2 = Math.floor(vw2); WH = vw2; WT_RY = my;
                 const b2 = wallTex(hit, u2, hit === 6 || hit === 7 || hit === 12 ? vw2 / CHc : hit >= 10 && hit < 15 || hit >= 18 ? vw2 : vw2 - ly2, mx, hit >= 10 && hit < 12 || hit >= 18 ? my : hit === 12 ? my : my + ly2 * 57, side);
@@ -38248,7 +38248,7 @@ o=]#########=>
             // far off, a wall's fine pattern (mortar, moss, pale flecks) is smaller than a letter: each cell catches one point of
             // it, and the least turn of the head changes which, so it sparkles. Past a few paces the pattern is drawn toward the
             // wall's own average, the way the eye blurs it, so far walls hold still while near ones keep every detail
-            { const d0 = G.cityK || G.cotK ? 4.5 : G.sky ? 8 : 3.2, kmax = G.cityK || G.cotK ? .5 : G.sky ? .35 : .62; if (perp > d0) { const A = WAVG[hit] || (WAVG[hit] = [base, tr, tg, tb]); A[0] += (base - A[0]) * .004; A[1] += (tr - A[1]) * .004; A[2] += (tg - A[2]) * .004; A[3] += (tb - A[3]) * .004;
+            { const d0 = G.cityK || G.cotK ? 4.5 : G.sky ? 8 : 3.2, kmax = 0;   /* (v739) no pull toward the wall's average */ if (perp > d0) { const A = WAVG[hit] || (WAVG[hit] = [base, tr, tg, tb]); A[0] += (base - A[0]) * .004; A[1] += (tr - A[1]) * .004; A[2] += (tg - A[2]) * .004; A[3] += (tb - A[3]) * .004;
               const k = Math.min(kmax, (perp - d0) / 8); base += (A[0] - base) * k; tr += (A[1] - tr) * k; tg += (A[2] - tg) * k; tb += (A[3] - tb) * k; } }
             const hf = CHc - vw;   // (below the house's own floor, down a foundation where the street falls away, hf runs negative: no foot-shadow there, it would turn the stones black)
             const ao = (hf < 0 ? .82 : hf < .14 ? .45 + .55 * hf / .14 : 1) * (vw < .1 ? .6 + .4 * vw / .1 : 1) * cao;
@@ -38270,7 +38270,7 @@ o=]#########=>
           if (!floor && !ceil2 && TBN) { let drawn = false;
             for (let q = 0; q < TBN && !drawn; q++) { if (yp < TBTOP[q]) continue; const hh = EYE - TBB[q] + (hor - yp) * TBP[q] / projPx, rd0 = RAY_D; RAY_D = TBP[q] * Math.hypot(rdx, rdy);
               let b2 = wallTex(TBT[q], TBU[q], CH - hh, TBM[q], TBY[q], TBS[q]); if (b2 < 0) { RAY_D = rd0; continue; } drawn = true; if (RF) PIXD[i] = TBP[q];
-              if (SURF_BARE && !PANOHIT && TBP[q] * SPKW > .05) {   // (v736) 2x2 over the footprint, averaged
+              if (false && SURF_BARE && !PANOHIT && TBP[q] * SPKW > .05) {   /* (v739) */   // (v736) 2x2 over the footprint, averaged
                 const dz = Math.min(.4, TBP[q] * SPKW / 1.2 * .25), du = Math.min(.4, dz * cellW / cellH), t0r = tr, t0g = tg, t0b = tb, E0 = EMIT; let ne = 0, sb = b2, sr = tr * b2, sg = tg * b2, sl = tb * b2, sn = 1;
                 const nk = 2; for (let k0 = 0; k0 < nk; k0++) { const k2 = nk === 2 ? k0 * 3 : k0, c2 = wallTex(TBT[q], Math.min(.999, Math.max(.001, TBU[q] + (k2 & 1 ? du : -du))), CH - hh + (k2 & 2 ? dz : -dz), TBM[q], TBY[q], TBS[q]);
                   if (c2 >= 0 && !PANOHIT && !SKYTHRU) { sb += c2; sr += tr * c2; sg += tg * c2; sl += tb * c2; sn++; if (EMIT) ne++; } EMIT = false; PANOHIT = false; SKYTHRU = false; }
