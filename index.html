@@ -217,6 +217,7 @@
   .mbtn:hover:not(:disabled)::before, .mbtn:focus-visible::before { transform: translateY(-50%) scale(1); }
   .mbtn:hover:not(:disabled)::after, .mbtn:focus-visible::after { transform: scaleX(1); }
   .mbtn:disabled { color: #6b5d48; cursor: default; text-shadow: none; }
+  .mmenu .mver { position: absolute; right: max(10px, 1.6cqw); bottom: max(8px, 1.4cqh); margin: 0; font: 400 12px var(--label); letter-spacing: .14em; color: #8f7f62; opacity: .8; pointer-events: none; text-shadow: 0 1px 3px #000; }
   .mmenu .msave { margin: -10px 0 0 30px; font-size: 12.5px; color: #9c8a6c; font-style: italic; min-height: 1em; }
   .mmenu .mq { margin: 0 0 0 30px; font: 400 20px var(--label); letter-spacing: .06em; color: #e6d2a6; }
   .mmenu .tmode { margin: 18px 0 0 30px; opacity: .75; }
@@ -29213,6 +29214,7 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
+  const GAME_VERSION = 'v728';   // (v728) shown in the main menu's corner
   function showMenu() {
     setState('menu'); unlock(); menuSave = null;
     if (!G || !G.menuScene) genMenuScene();
@@ -29226,6 +29228,7 @@ o=]#########=>
         <button class="mbtn" id="quitBtn">Quit Game</button>
       </nav>
       <p class="msave" id="saveNote"></p>
+      <p class="mver" aria-label="Game version">Glyphcrawl ${GAME_VERSION}</p>
       <label class="tmode"><input type="checkbox" id="testMode" ${testMode ? 'checked' : ''}> Test mode <span>start in a room of chests holding every item</span></label>
     </div>`;
     document.getElementById('newBtn').onclick = showCreate; setTimeout(campDb, 1500);   // (v684)
