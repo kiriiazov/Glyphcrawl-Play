@@ -130,6 +130,12 @@
   .cs-sheet { max-height: 0; overflow: hidden; margin-top: -4px; margin-bottom: -4px; transition: max-height .75s cubic-bezier(.3,.7,.2,1) .12s;
     background: radial-gradient(130% 60% at 50% 0%, rgba(120,84,40,.3), transparent 60%), radial-gradient(130% 60% at 50% 100%, rgba(120,84,40,.34), transparent 60%), repeating-linear-gradient(92deg, rgba(110,78,40,.05) 0 3px, transparent 3px 9px), linear-gradient(90deg, #b99c68, #dcc594 9%, #e6d2a4 50%, #dac190 91%, #b3955f); }
   .camp-scroll.on .cs-sheet { max-height: var(--sheetH, 640px); overflow: hidden; }
+  /* (v735) the sheet is unrolled by a clip, and the lower rod rides down with it: nothing is laid out again while it opens */
+  .camp-scroll { filter: none !important; }
+  .camp-scroll .cs-sheet { max-height: var(--sheetH, 640px); clip-path: inset(0 0 100% 0); transition: clip-path .72s cubic-bezier(.22,.8,.24,1) .08s; will-change: clip-path; box-shadow: 0 16px 34px rgba(0,0,0,.6); }
+  .camp-scroll.on .cs-sheet { clip-path: inset(0 0 -40px 0); }
+  .camp-scroll .cs-sheet + .cs-rod { transform: translateY(calc(-1 * var(--shH, 320px))); transition: transform .72s cubic-bezier(.22,.8,.24,1) .08s; will-change: transform; }
+  .camp-scroll.on .cs-sheet + .cs-rod { transform: none; }
   .cs-in { padding: 22px 26px 20px; color: #2c1d10; font: 400 15px/1.42 var(--prose, "EB Garamond", Georgia, serif); }
   .camp .camp-scroll, .camp .camp-folk { text-align: left; } .camp .cs-in p { color: inherit; font-size: inherit; line-height: inherit; margin: 0; } .camp .cf-in p { font-size: inherit; line-height: inherit; }
   .camp .cs-in h2 { background: none; -webkit-background-clip: border-box; background-clip: border-box; filter: none; padding: 0; color: #3a1f0c; -webkit-text-fill-color: currentColor; }
@@ -1699,7 +1705,7 @@
         float off = s2 * uCell.x * .16;
         vec3 col; if (off > .35 && uLoQ < .5) { float cr = cellAt(px + vec2(off, 0.0)).r, cb = cellAt(px - vec2(off, 0.0)).b; col = cellAt(px); col.r = cr; col.b = cb; } else col = cellAt(px);
         // far letters soften into the tone of their own cells
-        col = mix(col, grade(av.bgr, cell), s2 * .42);   // (v710) less: crisper
+        col = mix(col, grade(av.bgr, cell), s2 * .42 * (cGI > .5 || t > .9 ? 1.0 : 0.0));   // (v735) a bare surface keeps its own cell's colour (only the sky and far things soften)   // (v710) less: crisper
         if (uCine.x > 0.0) col = cine(col, px, t, av.bgr);
         // phosphor glow: bright cells bleed light into their neighbours, a little up close and more far off
         if (uCine.x <= 0.0) { vec2 du = 1.3 / uGrid, dd = du * 1.6;
@@ -29238,7 +29244,7 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
-  const GAME_VERSION = 'v734';   // (v728) shown in the main menu's corner
+  const GAME_VERSION = 'v735';   // (v728) shown in the main menu's corner
   // (v729) the last few errors, kept in this browser and shown under the version, so a player can read them out
   const ERRN = { list: (() => { try { return JSON.parse(localStorage.getItem('glyph.errs') || '[]'); } catch (e) { return []; } })() };
   function noteErr(err, where) { try { const m = (err && (err.message || err.reason && err.reason.message || err.reason) || String(err)).toString().slice(0, 160), st = err && err.stack ? String(err.stack).split('\n').find(l => /:\d+:\d+/.test(l)) || '' : '', at = (st.match(/:(\d+):(\d+)\)?\s*$/) || []).slice(1).join(':');
@@ -29550,6 +29556,19 @@ o=]#########=>
   CAMP_FIG.alchemist = { at: [.82, .78], yaw: -.6, syaw: -.3, bodyH: .52, per: 7, sit: [.7, 0], nod: .28,
     rest: { R: [-.12, 1.0, .46], ra: [0, -.6, 1], L: [.26, 1.34, .3], la: [0, 1, .3], F: [[-.2, .8, .44], [.18, .74, .5]] },
     k: [[.22, { R: [-.02, .98, .5] }, { nod: .32 }], [.42, { R: [-.18, 1.0, .42] }, { nod: .3 }], [.6, { L: [.16, 1.5, .34], la: [0, 1, .1] }, { nod: .05, turn: .2 }], [.82, { R: [-.06, .99, .48] }, { nod: .3 }]] };   // stirring the little pot; holding a vial up to the firelight
+  // (v735) the seven in one circle round the fire, in the order the camera goes round them; each faces the fire. Offsets that
+  // belonged to a figure (its seat, its pot, the weapon at its side) turn with it
+  const CAMP_AT0 = {}; for (const k in CAMP_FIG) CAMP_AT0[k] = CAMP_FIG[k].at.slice();
+  CAMP_ORDER.splice(0, CAMP_ORDER.length, 'warrior', 'marksman', 'magus', 'alchemist', 'druid', 'assassin', 'paladin');
+  const CAMP_R = 2.7;
+  CAMP_ORDER.forEach((k, n) => { const a = -Math.PI / 2 + n * TAU / CAMP_ORDER.length, D = CAMP_FIG[k]; D.at = [Math.cos(a) * CAMP_R, Math.sin(a) * CAMP_R]; D.ang = a;
+    D.rho = Math.atan2(-D.at[1], -D.at[0]) - Math.PI / 2;   // how far it turns from the old facing (toward the old camera, +y)
+    // seen from the wide camera (far off to the south, +y): 0 facing it, + turned toward its right
+    const fa = Math.atan2(-D.at[1], -D.at[0]), ca = Math.PI / 2; let y = ca - fa; y = Math.atan2(Math.sin(y), Math.cos(y)); D.yaw = y; });
+  const campRot = (k, o) => { const r = CAMP_FIG[k].rho, c = Math.cos(r), s0 = Math.sin(r); return [o[0] * c - o[1] * s0, o[0] * s0 + o[1] * c]; };
+  const campOff = (k, x, y) => { const D0 = CAMP_AT0[k], o = campRot(k, [x - D0[0], y - D0[1]]); return [CAMP_FIG[k].at[0] + o[0], CAMP_FIG[k].at[1] + o[1]]; };   // a point near its old seat, carried to its new one
+  if (CAMP_FIG.paladin.take) CAMP_FIG.paladin.take.at = campRot('paladin', CAMP_FIG.paladin.take.at);
+  CAMP_FIG.magus.stand = campRot('magus', CAMP_FIG.magus.stand);   // he steps off his log toward the fire
   const campRaw = Q => { const m = Q.k === 1 && Q.cv === 1 ? Q : (Q.F[0].length === 3 ? { k: 1, cast: false, cv: 1, R: Q.R.slice(), ra: nrm3(Q.ra), L: Q.L.slice(), la: nrm3(Q.la), F: Q.F.map(f => f.slice()), arrowL: !!Q.arrowL } : mkPose(Q)); return m; };
   const campLerp = (A, B, f) => { const m = (a, b) => a.map((v, i) => v + (b[i] - v) * f); return { k: 1, cast: false, cv: 1, R: m(A.R, B.R), ra: nrm3(m(A.ra, B.ra)), L: m(A.L, B.L), la: nrm3(m(A.la, B.la)), F: [m(A.F[0], B.F[0]), m(A.F[1], B.F[1])], arrowL: !!(A.arrowL && B.arrowL) }; };
   const campBreath = (A, dy) => ({ ...A, R: [A.R[0], A.R[1] + dy, A.R[2]], L: [A.L[0], A.L[1] + dy, A.L[2]], F: A.F.map(f => f.slice()) });   // (v616) both hands carried up a little by a breath
@@ -29594,7 +29613,7 @@ o=]#########=>
     } else { campFrames([[0, from[0], from[1]], [1, st, so]], D.up ? 6 : 7, false).slice(D.up ? 0 : 1, D.up ? 5 : 6).forEach((fr, n) => { plan[pre + 'u' + n] = { ...fr, pri: .5 }; }); F.NU = 5; F.upT = .6; }   // (v637) getting up is made for everyone before their idling
     const NA = COARSE || WEBKIT ? 12 : 16;   // (v624) more frames to every move, and to the idles below: smoother
     campFrames([[0, st, so], ...S.k.map(([t, q, tu]) => [t, campRaw({ ...base, ...q }), typeof tu === 'object' ? { ...so, turn: tu.turn || 0, yaw: so.yaw + (tu.dy || 0) } : { ...so, turn: tu || 0 }]), [1, st, so]], NA, false).forEach((fr, n) => { plan[pre + 'a' + n] = { ...fr, pri: n <= Math.ceil(NA * .3) ? .6 + n * .001 : 1.8 }; });   // (v639) the start of its move is made behind the fog, with its getting up
-    { const yw = (o, t) => ({ ...o, yaw: (o.yaw || 0) + t * TAU });   // (v707) the flourish when it is chosen: its move, whirled once round
+    if (false) { const yw = (o, t) => ({ ...o, yaw: (o.yaw || 0) + t * TAU });   // (v707) the flourish (v735: gone) when it is chosen: its move, whirled once round
       campFrames([[0, st, so], ...S.k.map(([t, q, tu]) => [t, campRaw({ ...base, ...q }), yw(typeof tu === 'object' ? { ...so, turn: tu.turn || 0, yaw: so.yaw + (tu.dy || 0) } : { ...so, turn: tu || 0 }, t)]), [1, st, yw(so, 1)]], NA, false).forEach((fr, n) => { plan[pre + 'f' + n] = { ...fr, pri: 1.6 + n * .001 }; }); }
     // (v616) once it has shown its move it does not stand frozen: it breathes, shifts its weight, looks one way and the other
     const NI = COARSE || WEBKIT ? 6 : 10, sw = (dy, o) => [campBreath(st, dy), { ...so, ...o, yaw: so.yaw + (o.yaw || 0) }];
@@ -29710,7 +29729,7 @@ o=]#########=>
     // the chapel's footings running south on the east side: a line of low stones in the grass
     for (let k = 0; k < 6; k++) { if (k === 3) continue; const y0 = fy - 4.5 + k * .5; gb(fx + 5.9, y0, fx + 6.28, y0 + .46, 0, .14 + h2(k, 91) * .14, 'ruin', { c: ST(k + 120), g: g0 + 33 }); }
     // (v616) the watcher's rock: a weathered outcrop, its layers showing, moss on its shoulders, a lip of stone behind and a step at its side
-    const rk = (a, b, c, d, z0, z1, col) => gb(fx + a, fy + b, fx + c, fy + d, z0, z1, 'crag', { c: col, g: g0 + 16 }, [fx - 2.45, fy - 2.1]);
+    const RKD = [CAMP_FIG.marksman.at[0] + 2.45, CAMP_FIG.marksman.at[1] + 2.1], rk = (a, b, c, d, z0, z1, col) => gb(fx + a + RKD[0], fy + b + RKD[1], fx + c + RKD[0], fy + d + RKD[1], z0, z1, 'crag', { c: col, g: g0 + 16 }, [fx - 2.45 + RKD[0], fy - 2.1 + RKD[1]]);   // (v735) under the marksman
     rk(-3.02, -2.58, -1.86, -1.72, 0, .38, [112, 106, 96]); rk(-2.94, -2.5, -1.96, -1.8, .38, .46, [132, 126, 114]);   // the body and its flat top
     rk(-3.06, -2.62, -1.82, -1.68, .16, .2, [80, 78, 72]);   // a seam between its layers
     rk(-2.78, -2.92, -1.98, -2.52, 0, .6, [104, 100, 92]); rk(-2.66, -2.88, -2.1, -2.56, .6, .7, [122, 116, 106]);   // the lip behind
@@ -29730,7 +29749,8 @@ o=]#########=>
     // the fire, and what lies about it
     L.fire = push('prop', 'campfire', fx, fy, { r: .3, fire: 'warm', fz: .1, fs: .3 });
     L.fireL = { x: fx, y: fy, r: 1, g: .6, b: .3, i: 3.4, k: .07, flick: true }; L.statics.push(L.fireL, { x: fx, y: fy - 1, r: .5, g: .62, b: .95, i: .6, k: .03 });
-    push('prop', 'campLog', fx + 1.2, fy - 1.1, { r: .2, rot: .55 }); push('prop', 'campMat', fx - .86, fy + .76, { r: .2, rot: .4 }); push('prop', 'campRoll', fx + 2.2, fy + .78, { r: .2, rot: 1.25 }); L.campPot = push('prop', 'campPot', fx + 1.08, fy + 1.04, { r: .12 });   // (v623) the Alchemist's pot, where he stirs
+    { const lg = campOff('magus', 1.2, -1.1), mt = campOff('assassin', -.86, .76), pt = campOff('alchemist', 1.08, 1.04);   // (v735) each seat with its owner
+      push('prop', 'campLog', fx + lg[0], fy + lg[1], { r: .2, rot: .55 + CAMP_FIG.magus.rho }); push('prop', 'campMat', fx + mt[0], fy + mt[1], { r: .2, rot: .4 + CAMP_FIG.assassin.rho }); push('prop', 'campRoll', fx + 3.7, fy + 1.9, { r: .2, rot: 1.25 }); L.campPot = push('prop', 'campPot', fx + pt[0], fy + pt[1], { r: .12 }); }   // (v623) the Alchemist's pot, where he stirs
     push('prop', 'tent', fx + 5.3, fy - 1.6, { r: .7 });
     for (let k = 0; k < 46; k++) { const an = h2(k, 31) * TAU, r = 1.4 + h2(k, 33) * 7.5, x = fx + Math.cos(an) * r, y = fy + Math.sin(an) * r; if (map[Math.floor(y) * W + Math.floor(x)] || (y > fy + 1.6 && Math.abs(x - fx) < 2.2 + (y - fy) * .3) || Math.hypot(x - fx, y - fy) < 3.2) continue; push('deco', pick(['fern', 'grass', 'grass', 'rubble', 'grass', 'bones']), x, y, { rot: h2(k, 35) * 7 }); }
     G = Object.assign(L, { depth: 1, stairs: { x: 1, y: 1 }, tavern: false, cut: true, camp: true, sky: true, rot: .3, theme: 'swamp', curRoom: -1, pLight: 0, sprAmb: .55, amb: [.52, .52, .7], fogK: .035, fogB: .06, fogCol: [26, 30, 42] });
@@ -29788,6 +29808,7 @@ o=]#########=>
   //   where the mist is thick the letter is the mist's own, and as it thins the letters come back one by one, so the place
   //   shows through it as it dissolves. Going back to the title, it gathers again.
   let MIST_A = new Float32Array(1), MIST_C = new Float32Array(1);
+  let MIST_B = new Float32Array(1);
   function campMist(n) {
     const C = CAMP; if (!C || PIXD.length !== n || !G.campRel) return;
     const l0 = Math.min(1, C.fogT / 4), lift = l0 * l0 * (3 - 2 * l0), now = C.t, dtm = Math.min(.1, Math.max(0, now - (C.mistT ?? now))); C.mistT = now;
@@ -29814,6 +29835,9 @@ o=]#########=>
     if (misty) for (let r = 0; r < rows; r += 2) for (let x = 0; x < cw; x += 2) { const i = r * cw + x, d0 = dep(i); if (d0 < .3) { MIST_A[i] = 0; continue; } air(i, x, r, d0);
       for (const [dx, dr] of [[1, 0], [0, 1], [1, 1]]) { const x2 = x + dx, r2 = r + dr; if (x2 >= cw || r2 >= rows) continue; const j = r2 * cw + x2, d = dep(j);
         if (Math.abs(d - d0) < d0 * .12 + .05) { MIST_A[j] = MIST_A[i]; MIST_C[j] = MIST_C[i]; } else if (d < .3) MIST_A[j] = 0; else air(j, x2, r2, d); } }
+    if (misty) { if (MIST_B.length !== n) MIST_B = new Float32Array(n); const A0 = MIST_A, B = MIST_B;   // (v735) softened across cells: [1 2 1] each way
+      for (let r = 0; r < rows; r++) for (let x = 0; x < cw; x++) { const i = r * cw + x; B[i] = (A0[x > 0 ? i - 1 : i] + 2 * A0[i] + A0[x < cw - 1 ? i + 1 : i]) * .25; }
+      for (let r = 0; r < rows; r++) for (let x = 0; x < cw; x++) { const i = r * cw + x; A0[i] = (B[r > 0 ? i - cw : i] + 2 * B[i] + B[r < rows - 1 ? i + cw : i]) * .25; } }
     for (let r = 0; r < rows; r++) { const s = (hor - (r + .5) * cellH) / pp;
       for (let x = 0; x < cw; x++) { const i = r * cw + x, m = M[i], d = m ? 1e9 : D[i];
         if (!m && d < 30 && fade > 0) { const camX = 2 * (x + .5) / cw - 1, wx = P.x + (dX + plX * camX) * d, wy = P.y + (dY + plY * camX) * d;   // the ground's face to the moon
@@ -29824,7 +29848,7 @@ o=]#########=>
         const mc = MIST_C[i], w = (mc >> 2) / 64, wq = w * w * .55, lit = .8 + (mc & 3) * .11 + (mc % 1) * .11; let cr = (128 + 102 * wq) * lit, cg = (136 + 24 * wq) * lit, cb = (154 - 50 * wq) * lit;
         if (CAMP && CAMP.hueK > .01 && CAMP.hueC) { const k = CAMP.hueK * .7, Lm = (cr + cg + cb) / 3, H = CAMP.hueC; cr += (H[0] / 150 * Lm - cr) * k; cg += (H[1] / 150 * Lm - cg) * k; cb += (H[2] / 150 * Lm - cb) * k; }   // (v707) the mist in the people's hue
         const b0 = bgc[i], kb = a * .95; bgc[i] = pack(((b0 >> 16) & 255) * (1 - kb) + cr * .46 * kb, ((b0 >> 8) & 255) * (1 - kb) + cg * .46 * kb, (b0 & 255) * (1 - kb) + cb * .46 * kb); recScale(i, 1, 1 - kb);
-        const own = a > .5 && !gly[i];   // where nothing else is drawn and the mist is thick, a faint letter of its own: one of the flat letters (- ~ =) the open ground is drawn in. Elsewhere the mist only veils: the colour of what is there fades into it
+        const own = false;   // (v735) the mist has no letters of its own   // where nothing else is drawn and the mist is thick, a faint letter of its own: one of the flat letters (- ~ =) the open ground is drawn in. Elsewhere the mist only veils: the colour of what is there fades into it
         if (own) { gly[i] = LUTF[Math.min(255, (20 + a * 80 + (mc % 4) * 10) | 0)]; fgc[i] = pack(cr * .82, cg * .82, cb * .82); }
         else if (gly[i]) { const f0 = fgc[i], q = a * .62; fgc[i] = pack(((f0 >> 16) & 255) * (1 - q) + cr * .72 * q, ((f0 >> 8) & 255) * (1 - q) + cg * .72 * q, (f0 & 255) * (1 - q) + cb * .72 * q); recScale(i, 1 - q, 1); }
       } }
@@ -29861,10 +29885,10 @@ o=]#########=>
     let lo = 1e9, hi = -1e9; for (const F of fs) { lo = Math.min(lo, F.x - .35); hi = Math.max(hi, F.x + .35); }
     const cx = (lo + hi) / 2, half = .9 * K;   // the plane's half-width is K at the near distance 1: keep the outermost within 86% of it
     let cy = -1e9; for (const F of fs) { const lat = Math.abs(F.x - cx) + .35; cy = Math.max(cy, F.y + lat / half, F.y + 1.75); }
-    let zs = 0, ds = 0; for (const F of fs) { zs += F.z + (F.mode === 'rest' ? F.D.bodyH : 1.05) * .5; ds += cy - F.y; } zs /= fs.length; ds /= fs.length;
+    let zs = 0, ds = 0; for (const F of fs) { zs += F.z + (F.mode === 'rest' ? F.D.bodyH : 1.05) * .5; ds += cy + .9 - F.y; } zs /= fs.length; ds /= fs.length;
     const kp = (cols * cellW / 2) / K / (rows * cellH);
-    const z = EYE_FILM + .62;   // (v529) up over the six, looking down on them
-    return { x: cx, y: cy, z, a: -Math.PI / 2, pitch: (zs - z) / ds * kp + .02, vk: 1 };
+    const z = EYE_FILM + 1.25, cy2 = cy + .9;   // (v735) higher over the circle, and further back
+    return { x: cx, y: cy2, z, a: -Math.PI / 2, pitch: (zs - z) / ds * kp + .02, vk: 1 };   // (v735)
   }
   function campStart() {
     SPARKS = [];   // (v620) the last hero's sparks (a Soulthirst Blade's shadow) stop where they were outside play: they are cleared
@@ -29975,7 +29999,7 @@ o=]#########=>
   function campTick(dt) {
     const C = CAMP; if (!C) return; C.t += dt; const t = C.t;
     // the work of making them: more of the frame while the fog still hides the place
-    { const wait = C.sel && (C.figs[C.sel].mode === 'rise' || C.figs[C.sel].mode === 'atk' || C.figs[C.sel].mode === 'flo'), end = performance.now() + (!C.ready ? (C.fogT > 0 ? 26 : 110) : wait ? (C.figs[C.sel].waitU && C.figs[C.sel].mode === 'rise' ? (COARSE ? 22 : 38) : COARSE ? 14 : 22) : C.spin ? 20 : COARSE ? 8 : 12); while (C.q.length && performance.now() < end) { const j = C.q.shift(); let r; try { r = j(end); } catch (err) { noteErr(err, 'camp job'); continue; } if (typeof r === 'function') { r.pri = -9; r.camp = j.camp; C.q.unshift(r); break; } } }
+    { const wait = C.sel && (C.figs[C.sel].mode === 'rise' || C.figs[C.sel].mode === 'atk' || C.figs[C.sel].mode === 'flo'), end = performance.now() + (C.scrollT && performance.now() - C.scrollT < 900 ? 2 : !C.ready ? (C.fogT > 0 ? 26 : 110) : wait ? (C.figs[C.sel].waitU && C.figs[C.sel].mode === 'rise' ? (COARSE ? 22 : 38) : COARSE ? 14 : 22) : C.spin ? 20 : COARSE ? 8 : 12); while (C.q.length && performance.now() < end) { const j = C.q.shift(); let r; try { r = j(end); } catch (err) { noteErr(err, 'camp job'); continue; } if (typeof r === 'function') { r.pri = -9; r.camp = j.camp; C.q.unshift(r); break; } } }
     if (!C.ready && Object.values(C.figs).every(F => SPR[F.pre + 'r0'])) C.ready = true;
     if (!C.ready && campFogAt && performance.now() - campFogAt > 12000) {   // (v729) the fog never waits more than 12 s
       const any = Object.values(C.figs).map(F => SPR[F.pre + 'r0']).find(Boolean) || SPR.mgR;
@@ -29998,7 +30022,7 @@ o=]#########=>
       if (F.mode === 'rest') { const n = Math.floor(((t / D.per + F.ph) % 1) * F.NR); key = F.pre + 'r' + n; zo = Math.sin(t * 1.5 + F.ph * 9) * .004; if (D.lie) zo += .1; }
       else if (F.mode === 'rise' || F.mode === 'down') { const u = Math.max(0, Math.min(1, F.mt / (F.upT || .5))), k = Math.max(0, Math.min(F.NU - 1, Math.floor((F.mode === 'rise' ? u : 1 - u) * F.NU))); key = F.pre + 'u' + k;
         if (F.mode === 'rise') { let all = true; for (let i = 0; i < F.NU; i++) if (!SPR[F.pre + 'u' + i]) { all = false; break; } F.waitU = !all && F.mt < .05; if (F.waitU) { F.mt = Math.min(F.mt, 0); campHurry(F); const rk = F.pre + 'r' + Math.floor(((t / D.per + F.ph) % 1) * F.NR); key = SPR[rk] ? rk : F.pre + 'r0'; zo = Math.sin(t * 1.5 + F.ph * 9) * .004; } else if (F.mt <= 0 && D.take) key = F.pre + 'r0'; else if (!SPR[key]) { let i = k; while (i > 0 && !SPR[F.pre + 'u' + i]) i--; key = SPR[F.pre + 'u' + i] ? F.pre + 'u' + i : F.pre + 'r0'; campHurry(F); } }   // (v642) until its getting up is all made it goes on resting where it sits, then rises in one smooth go   // (v607) the pickup waits for the view to close in, and for each of its frames
-        if (u >= 1) { if (F.mode === 'down') F.mode = 'rest'; else if (SPR[F.pre + 'a' + Math.min(F.NA - 1, Math.ceil(F.NA * .3))] || (F.atkHold = (F.atkHold || 0) + dt) > .35) { F.mode = 'atk'; F.mt = 0; F.said = {}; } else campHurry(F); } }
+        if (u >= 1) { if (F.mode === 'down') F.mode = 'rest'; else if (!F.atkNext) { F.mode = 'ready'; F.mt = .3; } else if (SPR[F.pre + 'a' + Math.min(F.NA - 1, Math.ceil(F.NA * .3))] || (F.atkHold = (F.atkHold || 0) + dt) > .35) { F.mode = 'atk'; F.mt = 0; F.said = {}; F.atkNext = false; } else campHurry(F); } }   // (v735) standing ready; the attack waits for Choose
       else if (F.mode === 'atk') { if (!SPR[F.pre + 'a' + Math.min(F.NA - 1, Math.floor(Math.min(1, F.mt / F.dur) * F.NA))]) campHurry(F);   // (v626) the move starts once its first third is made and waits on any frame not made yet
         const p = Math.min(1, F.mt / F.dur); { let i = Math.min(F.NA - 1, Math.floor(p * F.NA)); while (i > 0 && !SPR[F.pre + 'a' + i]) i--; key = F.pre + 'a' + i; } campFx(F, p, dt); if (p >= 1) { F.mode = 'ready'; F.mt = 0; } }
       else if (F.mode === 'flo') { const NF = F.NA, d = (F.dur || 1) * 1.35; let i = Math.min(NF - 1, Math.floor(Math.min(1, F.mt / d) * NF)); if (!SPR[F.pre + 'f' + i]) campHurry(F); while (i > 0 && !SPR[F.pre + 'f' + i]) i--;   // (v707) the flourish
@@ -30019,14 +30043,20 @@ o=]#########=>
       if (F.beast && !sel) { const b = F.beast; F.beast = null; G.ents = G.ents.filter(e => e !== b); for (let q = 0; q < 20; q++) campPart(b.x + (Math.random() - .5) * .6, b.y + (Math.random() - .5) * .6, Math.random() * .7, { vz: .8, life: .6, col: [170, 235, 200], glow: true, size: .026 }); }
     }
     // the view: wide over the fire, or closed in on the one chosen (it stands in the left of the frame, the scroll beside it)
-    for (const F of Object.values(C.figs)) { const vis = C.sel && C.sel !== F.cls ? 0 : 1; F.fadeV = (F.fadeV ?? 1) + Math.max(-dt * 2.5, Math.min(dt * 2.5, vis - (F.fadeV ?? 1))); F.e.campFade = F.fadeV; if (F.beast) F.beast.campFade = F.fadeV; F.light.i *= F.fadeV; F.pop = Math.max(0, (F.pop || 0) - dt * 1.4); F.hl = .34 + (F.hov || 0) * .5 + (C.sel === F.cls ? .22 : 0) + F.pop * F.pop * 1.3; }   // (v527) how strongly each is edged in its colour
+    for (const F of Object.values(C.figs)) { const vis = C.sel && C.sel !== F.cls ? 0 : 1; F.fadeV = F.fadeV ?? 1; F.shadeV = F.shadeV ?? 0;   // (v735) shadow, then smoke; or shadow, then colour
+      if (!vis) { F.shadeV = Math.min(1, F.shadeV + dt * 4.5); if (F.shadeV > .6 && F.fadeV > 0) { F.fadeV = Math.max(0, F.fadeV - dt * 2.2);
+          if (F.fadeV > .02) for (let q = 0; q < 3; q++) campPart(F.x + (Math.random() - .5) * .5, F.y + (Math.random() - .5) * .4, F.z + Math.random() * (F.D.bodyH || 1), { vz: .35 + Math.random() * .5, vx: (Math.random() - .5) * .3, vy: (Math.random() - .5) * .2, life: 1.1, col: Math.random() < .2 ? [70, 52, 96] : [16, 12, 22], soft: .6, size: .08 + Math.random() * .06, drag: .8 }); }
+        if (F.fadeV <= 0 && F.mode !== 'rest') { F.mode = 'ready'; F.mt = .3; } }
+      else { F.fadeV = Math.min(1, F.fadeV + dt * 2.6); if (F.fadeV > .55) F.shadeV = Math.max(0, F.shadeV - dt * 2.2);
+        if (F.fadeV < .98) for (let q = 0; q < 2; q++) { const a = Math.random() * TAU, r = .5 + Math.random() * .3, c = CAMP_AURA[F.cls]; campPart(F.x + Math.cos(a) * r, F.y + Math.sin(a) * r * .7, F.z + Math.random() * .3, { vx: -Math.cos(a) * .7, vy: -Math.sin(a) * .5, vz: .5 + Math.random() * .8, life: .6, col: Math.random() < .5 ? c : [24, 18, 34], glow: Math.random() < .5, soft: .3, size: .03, drag: 1.2 }); } }
+      F.e.campFade = F.fadeV; F.e.campShade = F.shadeV; if (F.beast) { F.beast.campFade = F.fadeV; F.beast.campShade = F.shadeV; } F.light.i *= F.fadeV * (1 - .7 * F.shadeV); F.pop = Math.max(0, (F.pop || 0) - dt * 1.4); F.hl = .34 + (F.hov || 0) * .5 + (C.sel === F.cls ? .22 : 0) + F.pop * F.pop * 1.3; }   // (v527) how strongly each is edged in its colour
     C.wide = campWide(C); let tg = C.wide;
-    if (C.sel) { const F0r = C.figs[C.sel], F0 = F0r.D.stand ? { ...F0r, x: F0r.e.x, y: F0r.e.y } : F0r, bt = F0.beast, F = bt ? { x: F0.x * .6 + bt.x * .4, y: F0.y * .6 + bt.y * .4, z: F0.z } : F0, tall = vp.clientHeight > vp.clientWidth * 1.05, dist = (C.step === 'folk' ? 1.72 : C.step === 'browse' ? 2.35 : 1.92) + (bt ? .45 : 0), a0 = Math.atan2(C.wide.y - F0.y, C.wide.x - F0.x) + (F0.x < C.fx ? .22 : -.12), cxm = F.x + Math.cos(a0) * dist, cym = F.y + Math.sin(a0) * dist; C.selCam = { x: cxm, y: cym };
+    if (C.sel) { const F0r = C.figs[C.sel], F0 = F0r.D.stand ? { ...F0r, x: F0r.e.x, y: F0r.e.y } : F0r, bt = F0.beast, F = bt ? { x: F0.x * .6 + bt.x * .4, y: F0.y * .6 + bt.y * .4, z: F0.z } : F0, tall = vp.clientHeight > vp.clientWidth * 1.05, dist = (C.step === 'folk' ? 1.72 : C.step === 'browse' ? 2.35 : 1.92) + (bt ? .45 : 0), a0 = Math.atan2(C.fy - F0.y, C.fx - F0.x),   /* (v735) from the fire's side */ cxm = F.x + Math.cos(a0) * dist, cym = F.y + Math.sin(a0) * dist; C.selCam = { x: cxm, y: cym };
       const toF = Math.atan2(F.y - cym, F.x - cxm), off = tall ? 0 : Math.atan((C.panelFrac || .42) * K * .92), kp = (cols * cellW / 2) / (K * .92) / (rows * cellH);
       const low = C.step === 'browse', z = low ? F0.z + .2 : F0.z + 1.02;   // (v707) browsing: down on the ground, looking up at it; chosen: risen over it
       tg = low ? { x: cxm, y: cym, z, a: toF, pitch: ((F.z + .46) - z) / dist * kp, vk: .9 } : { x: cxm, y: cym, z, a: toF - off, pitch: ((F.z + (tall ? .3 : .55)) - z) / dist * kp, vk: .92 }; }
     else { tg = { ...C.wide, x: C.wide.x + Math.sin(t * .13) * .12 + (C.mx || 0) * .25, a: C.wide.a + Math.sin(t * .09) * .012 + (C.mx || 0) * .03, pitch: C.wide.pitch + Math.sin(t * .11) * .006 - (C.my || 0) * .012 }; }
-    const cm = C.cam, q = 1 - Math.exp(-dt * (C.sel ? 4 : C.fogT < 1.8 ? 2.2 : 2.8));
+    const cm = C.cam, q = 1 - Math.exp(-dt * (C.sel ? (C.step === 'browse' ? 7.5 : 4) : C.fogT < 1.8 ? 2.2 : 2.8));   // (v735) a quick turn to the next
     cm.x += (tg.x - cm.x) * q; cm.y += (tg.y - cm.y) * q; cm.a += angDiff(tg.a, cm.a) * q; cm.pitch += (tg.pitch - cm.pitch) * q; cm.z = (cm.z ?? tg.z ?? EYE_FILM) + ((tg.z ?? EYE_FILM) - (cm.z ?? EYE_FILM)) * q; C.camZ = cm.z; cm.vk += (tg.vk - cm.vk) * q;
     C.shake = Math.max(0, (C.shake || 0) - dt); const sh = C.shake * C.shake * .5;
     P.x = cm.x + (Math.random() - .5) * sh; P.y = cm.y + (Math.random() - .5) * sh; P.a = cm.a + Math.sin(t * .37) * .003; pitch = pitchView = cm.pitch + (Math.random() - .5) * sh * .3; pitchAuto = 0; VK = K * cm.vk;
@@ -30110,8 +30140,8 @@ o=]#########=>
   function campBack() { const C = CAMP; if (!C) return; sfx(300, 220, .1, 'triangle', .02); if (C.step === 'folk') { C.step = 'pick'; campScroll(); } else if (C.step === 'pick') { C.step = 'browse'; const F = C.figs[C.sel]; if (F) F.spinA = 0; campScroll(); } else campLeave(); }
   function campCycle(d) { const C = CAMP; if (!C || C.step !== 'browse' || !C.sel) return; const n = CAMP_ORDER.indexOf(C.sel); campSelect(CAMP_ORDER[(n + d + CAMP_ORDER.length) % CAMP_ORDER.length]); sfx(d > 0 ? 520 : 460, d > 0 ? 700 : 340, .14, 'triangle', .02); }
   const campFlo = (F, pri) => { let n = 0; for (const j of CAMP.q) if (j.camp === F.pre && j.fl && j.pri > pri) { j.pri = pri; j.hurried = true; n++; } if (n) CAMP.q.sort((a, b) => a.pri - b.pri); };
-  function campChoose() { const C = CAMP; if (!C || C.step !== 'browse' || !C.sel) return; const F = C.figs[C.sel]; C.step = 'pick'; F.spinA = 0; campFlo(F, -6);
-    if (F.mode !== 'rest' && F.mode !== 'down' && F.mode !== 'rise') { F.mode = 'flo'; F.mt = 0; F.said = {}; F.shot = null; } F.pop = 1; campHurry(F); sfx(300, 900, .5, 'triangle', .03); sfx(90, 60, .6, 'sine', .03); campScroll(); }
+  function campChoose() { const C = CAMP; if (!C || C.step !== 'browse' || !C.sel) return; const F = C.figs[C.sel]; C.step = 'pick'; F.spinA = 0;
+    if (F.mode === 'rise') F.atkNext = true; else if (F.mode !== 'rest' && F.mode !== 'down') { F.mode = 'atk'; F.mt = 0; F.said = {}; F.shot = null; F.atkNext = false; }   /* (v735) its attack, not a whirl */ F.pop = 1; campHurry(F); sfx(300, 900, .5, 'triangle', .03); sfx(90, 60, .6, 'sine', .03); campScroll(); }
   // (v627) the chosen one seen from every side, for turning by hand: its stance baked at CAMP_SPIN headings (made only when first turned, after its move)
   const CAMP_SPIN = 5, SPIN_STEP = .0873, spinYaw = k => { const v = ((k % 5) + 5) % 5; return (v <= 2 ? v : v - 5) * SPIN_STEP; };   // (v707) front, 5 and 10 degrees each way
   function campSpinQueue(F) {
@@ -30127,9 +30157,10 @@ o=]#########=>
   }
   function campSelect(cls) {
     const C = CAMP; if (!C || C.sel === cls) return;
-    if (C.sel) { const F0 = C.figs[C.sel]; F0.mode = 'down'; F0.mt = 0; F0.shot = null; }
+    if (C.sel) { const F0 = C.figs[C.sel]; F0.shot = null; F0.atkNext = false; }   // (v735) it stays as it is while it turns to shadow
     C.sel = cls; C.step = cls && C.step !== 'browse' ? 'pick' : 'browse'; C.hover = null;
-    if (cls) { const F = C.figs[cls]; F.mode = 'rise'; F.mt = F.D.take ? -.7 : 0; F.holdT = 0; F.atkHold = 0; F.pop = 1; campHurry(F); choice.cls = cls; choice.sub = F.sub; sfx(420, 620, .16, 'triangle', .03); sfx(140, 90, .4, 'sine', .02); }
+    if (cls && (C.figs[cls].fadeV ?? 1) < .5) { const F = C.figs[cls]; F.mode = 'ready'; F.mt = .3; F.shadeV = 1; F.fadeV = 0; F.spawnT = 0; F.atkNext = false; F.holdT = 0; F.atkHold = 0; F.pop = 1; campHurry(F); choice.cls = cls; choice.sub = F.sub; sfx(260, 520, .4, 'sine', .025); sfx(90, 140, .5, 'triangle', .012); }   // (v735) out of sight: it rises from shadow, standing
+    else if (cls) { const F = C.figs[cls]; F.mode = 'rise'; F.mt = F.D.take ? -.7 : 0; F.atkNext = false; F.holdT = 0; F.atkHold = 0; F.pop = 1; campHurry(F); choice.cls = cls; choice.sub = F.sub; sfx(420, 620, .16, 'triangle', .03); sfx(140, 90, .4, 'sine', .02); }
     campScroll();
   }
   function campRedo(F, again) {   // its path, its people or its body changed: it is made again, and shows its move again if asked
@@ -30164,8 +30195,8 @@ o=]#########=>
     </div></div><div class="cs-rod"></div>`;
     el.querySelectorAll('.cs-paths button').forEach(b => b.onclick = () => { if (F.sub === b.dataset.sub) return; F.sub = b.dataset.sub; choice.sub = F.sub; campRedo(F, true); campScroll(); el.querySelector(`[data-sub="${F.sub}"]`).focus(); });
     document.getElementById('campTake').onclick = campFolkOpen;
-    if (!el.classList.contains('on')) { void el.offsetWidth; el.classList.add('on'); sfx(900, 500, .35, 'triangle', .008); }
-    campFit(); requestAnimationFrame(campFit);
+    if (!el.classList.contains('on')) { campFit(); const sh = el.querySelector('.cs-sheet'); if (sh) el.style.setProperty('--shH', sh.offsetHeight + 'px'); void el.offsetWidth; el.classList.add('on'); C.scrollT = performance.now(); sfx(900, 500, .35, 'triangle', .008); }   // (v735) fitted first, then unrolled
+    else campFit();
   }
   function campFolkOpen() { const C = CAMP; if (!C || !C.sel) return; const F = C.figs[C.sel]; C.step = 'folk'; bdSync(); choice.cls = F.cls; choice.sub = F.sub; choice.race = RACES[choice.race] ? choice.race : F.race; if (!lastChoice) { choice.race = F.race; choice.sex = F.sex; }
     if (F.race !== choice.race || F.sex !== choice.sex) { F.race = choice.race; F.sex = choice.sex; campRedo(F); } sfx(520, 700, .2, 'triangle', .03); campScroll(); }
@@ -35931,7 +35962,7 @@ o=]#########=>
       const k1 = b1 / bt, k2 = b2 / bt;
       SURF = SURF_BARE ? 1 : 0; put(i, b1 + b2, r * Math.min(1.25, .25 + cr) * k1 + FOGC[0] * k2, g * Math.min(1.25, .25 + cg) * k1 + FOGC[1] * k2, b * Math.min(1.25, .25 + cb) * k1 + FOGC[2] * k2); SURF = 0; return;
     }
-    SURF = SURF_BARE ? 1 : 0; if (SURF) base = SHN === 2 ? .5 + .5 * base : .3 + .7 * base; /* the ground calmer than walls */ put(i, base * lum, r * Math.min(1.25, .25 + cr), g * Math.min(1.25, .25 + cg), b * Math.min(1.25, .25 + cb)); SURF = 0;
+    SURF = SURF_BARE ? 1 : 0; if (SURF) base = SHN === 2 ? .4 + .6 * base : .3 + .7 * base; /* the ground calmer than walls */ put(i, base * lum, r * Math.min(1.25, .25 + cr), g * Math.min(1.25, .25 + cg), b * Math.min(1.25, .25 + cb)); SURF = 0;
   }
 
   function blit(def, left, top, wC, hR, lv, tint) {
@@ -38820,7 +38851,7 @@ o=]#########=>
             else continue; }
           else if (!sample(md, us, v)) continue;
           if (e.veilT > 0 && !e.keenSeen && ((r * 7 + c * 3 + ((t * 14) | 0)) % 6) > 1) continue;
-          if (e.campFade !== undefined && e.campFade < 1 && BAYER4[((r & 3) << 2) | (c & 3)] >= e.campFade * 16) continue;   // (v533) a camp figure fading out
+          if (e.campFade !== undefined && e.campFade < 1 && sn2(us * 7.3 + (e.id % 13) * 1.7, v * 9.1 - t * 1.6) * .72 + (1 - v) * .28 >= e.campFade) continue;   // (v735) comes apart like smoke, from the top down
           const i = r * cols + c;
           if (PURG && FLOORD[i] < ty - .3) continue;
           GSEED = ((((us * daw) | 0) * 73856093) ^ (((v * dah) | 0) * 19349663) ^ (e.id * 83492791)) >>> 1;   // (v722) the letter's shape by its texel
@@ -38834,6 +38865,7 @@ o=]#########=>
               if (k <= 0) { if (w.d > 0 && v > w.v && v < w.v + w.d && Math.abs(us - w.u) < w.r * (.25 + .3 * h2(q, (us * 90) | 0))) k = .7 * (1 - (v - w.v) / w.d); else continue; }
               k = k > .5 ? .9 : k * 1.8; SR += (w.c[0] - SR) * k; SG += (w.c[1] - SG) * k; SB += (w.c[2] - SB) * k; } }
           if (castK && v < .7) { const ck = castK * .45 * (1 - v / .7); SR += (castC[0] - SR) * ck; SG += (castC[1] - SG) * ck; SB += (castC[2] - SB) * ck; SD = Math.min(1, SD * (1 + ck * .6)); }
+          if (e.campShade > .002) { const k = e.campShade, rim = k * (u0 < .08 || u0 > .92 || v < .04 ? .35 : 0); SR += (14 + 60 * rim - SR) * k; SG += (10 + 40 * rim - SG) * k; SB += (24 + 90 * rim - SB) * k; SD *= 1 - .62 * k; }   // (v735) a shadow, faintly rimmed
           if (SE) { put(i, SD, SR, SG, SB); continue; }
           if (aura && !frozen && !stunned) {
             const band = .5 + .5 * Math.sin(t * 3.2 - v * 12 + ph), fl = .5 + .5 * Math.sin(t * 7.3 + u * 11 + v * 5 + ph);
@@ -39052,7 +39084,7 @@ o=]#########=>
     if (grading) { gsnapF.set(fgc); gsnapB.set(bgc); }
     const empOn = P.buffs.empower > 0 && state !== 'dead';
     if (empOn) { if (!empSnapF || empSnapF.length !== n0) { empSnapF = new Uint32Array(n0); empSnapG = new Uint8Array(n0); } empSnapF.set(fgc); empSnapG.set(gly); }
-    if (SURF_BARE) surfSmooth(); calmPass(); holdPass(); inkPass(null);   // (v733) v700's passes   // (v720) smoothRec
+    /* (v735) no blur over bare surfaces */ calmPass(); holdPass(); inkPass(null);   // (v733) v700's passes   // (v720) smoothRec
     // (the CRT glass keeps what you hold near: everything drawn from here to the hands' end is marked as in your hands)
     const crtHands = crtAmt > .001 && glOK; if (crtHands) { if (NEARM.length !== n0) { NEARM = new Uint8Array(n0); NSF = new Uint32Array(n0); NSB = new Uint32Array(n0); NSG = new Uint8Array(n0); } NSF.set(fgc); NSB.set(bgc); NSG.set(gly); }   // (letters held still between frames; then, at High and Ultra, the world's outlines in strokes, before the hands go over it)
     if (state !== 'cut' && state !== 'depart' && !G.menuScene && !G.intro && !CAMP && !LD.shot && !(INV3 && INV3.inR) && !(DLG && DLG.k > .45)) drawHandsEq(t, bx, by - (pitchView + pitchAuto) * rows * .12, flick);
