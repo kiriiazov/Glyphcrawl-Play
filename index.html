@@ -29253,7 +29253,7 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
-  const GAME_VERSION = 'v737';   // (v728) shown in the main menu's corner
+  const GAME_VERSION = 'v738';   // (v728) shown in the main menu's corner
   // (v729) the last few errors, kept in this browser and shown under the version, so a player can read them out
   const ERRN = { list: (() => { try { return JSON.parse(localStorage.getItem('glyph.errs') || '[]'); } catch (e) { return []; } })() };
   function noteErr(err, where) { try { const m = (err && (err.message || err.reason && err.reason.message || err.reason) || String(err)).toString().slice(0, 160), st = err && err.stack ? String(err.stack).split('\n').find(l => /:\d+:\d+/.test(l)) || '' : '', at = (st.match(/:(\d+):(\d+)\)?\s*$/) || []).slice(1).join(':');
@@ -31830,9 +31830,9 @@ o=]#########=>
     tr = 178 + h2(pr.hb, 31) * 12; tg = 164; tb = 134; return .2 + sn2(u * 2.6, hz * 2.6) * .05;
   }
   // (v736) a roof's slates and tiles averaged over the cell's footprint (2x2 and the centre), as the walls are
-  function roofSS(pr, u, w, sg, fp) { const b0 = roofSurf(pr, u, w, sg, fp); if (!SURF_BARE || fp < .03 || EMIT || b0 < 0) return b0;
+  function roofSS(pr, u, w, sg, fp) { const b0 = roofSurf(pr, u, w, sg, fp); if (!SURF_BARE || fp < .05 || EMIT || b0 < 0) return b0;
     const d = Math.min(.4, fp * .8), r0 = tr, g0 = tg, l0 = tb; let sb = b0, sr = tr * b0, sgc = tg * b0, sl = tb * b0, n = 1;
-    for (let k = 0; k < 4; k++) { EMIT = false; const c = roofSurf(pr, u + (k & 1 ? d : -d), w + (k & 2 ? d : -d), sg, fp); if (c >= 0 && !EMIT) { sb += c; sr += tr * c; sgc += tg * c; sl += tb * c; n++; } }
+    for (let k0 = 0; k0 < 2; k0++) { const k = k0 * 3; EMIT = false; const c = roofSurf(pr, u + (k & 1 ? d : -d), w + (k & 2 ? d : -d), sg, fp); if (c >= 0 && !EMIT) { sb += c; sr += tr * c; sgc += tg * c; sl += tb * c; n++; } }
     EMIT = false; if (sb > 1e-6) { tr = sr / sb; tg = sgc / sb; tb = sl / sb; } else { tr = r0; tg = g0; tb = l0; } return sb / n; }
   function drawRoofs(hor, dirX, dirY, plX, plY, projPx, light, tint) {
     const RS = G.roofs, near = RH.pr; near.length = 0;
@@ -35982,7 +35982,7 @@ o=]#########=>
   let LCX = -1, LCK = 0, LCF = 0, LCM = 0, SSW = false, SLR = 0, SLG = 0, SLB = 0, LODC = new Float32Array(1), LODCS = new Uint32Array(1);
   function shade(i, base, r, g, b, wx, wy, lv) {   // (v733) as in v700
     if (VEINK) { const d = wy - PRY(wx); if (d > -1 && d < 1) base *= 1 - VEINK * (1 - Math.abs(d)) * (.24 + .1 * Math.sin((wx - T * .6) * 2.1 + d * 3)); }
-    if (SURF_BARE) { SLR = r; SLG = g; SLB = b; base = surfLod(i, base, wx, wy); r = SLR; g = SLG; b = SLB; }   // (v736; v737 the colour too)
+    if (SURF_BARE && (SHN === 2 || SHN === 3)) { const lc = r * .3 + g * .59 + b * .11; if (lc > 1) { const k = Math.sqrt(132 / lc); r *= k; g *= k; b *= k; } }   // (v738) a dark joint colour pulled halfway toward a stone's
     let cr = lv * LT0 + AMB[0], cg = lv * LT1 + AMB[1], cb = lv * LT2 + AMB[2];
     for (let q = 0; q < LCN; q++) {
       const k = LCOL[q], dx = wx - LX[k], dy = wy - LY[k], d2 = dx * dx + dy * dy;
@@ -35996,7 +35996,7 @@ o=]#########=>
       const k1 = b1 / bt, k2 = b2 / bt;
       SURF = SURF_BARE ? 1 : 0; put(i, b1 + b2, r * Math.min(1.25, .25 + cr) * k1 + FOGC[0] * k2, g * Math.min(1.25, .25 + cg) * k1 + FOGC[1] * k2, b * Math.min(1.25, .25 + cb) * k1 + FOGC[2] * k2); SURF = 0; return;
     }
-    SURF = SURF_BARE ? 1 : 0; if (SURF) base = SHN === 2 ? .4 + .6 * base : .3 + .7 * base; /* the ground calmer than walls */ put(i, base * lum, r * Math.min(1.25, .25 + cr), g * Math.min(1.25, .25 + cg), b * Math.min(1.25, .25 + cb)); SURF = 0;
+    SURF = SURF_BARE ? 1 : 0; if (SURF) base = SHN === 2 || SHN === 3 ? .5 + .5 * base : .3 + .7 * base;   /* (v738) */ /* the ground calmer than walls */ put(i, base * lum, r * Math.min(1.25, .25 + cr), g * Math.min(1.25, .25 + cg), b * Math.min(1.25, .25 + cb)); SURF = 0;
   }
 
   function blit(def, left, top, wC, hR, lv, tint) {
@@ -37850,7 +37850,7 @@ o=]#########=>
     if (PIXD.length === cols * rows) PIXD.fill(1e9); PFST = (PFST + 1) >>> 0 || 2;   // (v702)
     { const n = cols * rows; if (TXS.length !== n) { TXH = new Float32Array(n); TXX = new Float32Array(n); TXY = new Float32Array(n); TXZ = new Float32Array(n); TXS = new Uint32Array(n); TXQ = new Uint8Array(n); TXK = new Uint8Array(n); } TXST = (TXST + 1) >>> 0 || 2; }   // (v701)
     if (false) AMB = G.tavern || G.theme === 'tavern' ? [.03, .021, .012] : [.011, .016, .029];   // (v701)
-    const nlCap = G.cityK ? Math.min(NEAR_LIGHTS, 12) : NEAR_LIGHTS, nearStatics = G.statics.length > nlCap ? nearLights(nlCap) : G.statics;
+    const nlCap = G.cityK ? Math.min(NEAR_LIGHTS, 8) : NEAR_LIGHTS,   /* (v738) */ nearStatics = G.statics.length > nlCap ? nearLights(nlCap) : G.statics;
     let lightsUse = nearStatics;
     if (G.statics.length > nlCap) {   // a light that falls out of the nearest few fades away over half a second instead of going out at once, and one coming in fades up
       const inSet = new Set(nearStatics), dtL = Math.min(.1, Math.max(.001, t - (render.lt || t))); render.lt = t; lightsUse = [];
@@ -38237,9 +38237,9 @@ o=]#########=>
           if (base < 0) { if ((G.tallH || G.cotK) && !PURG && (vv < .5 || SKYTHRU)) thru = true; else { base = .03; EMIT = false; } }
           if (!thru) {
             if (RF) PIXD[i] = perp; WALLX[y] = x;
-            if (SSW && SURF_BARE && !PANOHIT) { SSW = false; const fpw = perp * SPKW; if (fpw > .03) {   // (v736) the cell's footprint on the wall, sampled 2x2 and averaged
+            if (SSW && SURF_BARE && !PANOHIT) { SSW = false; const fpw = perp * SPKW; if (fpw > .05) {   // (v736) the cell's footprint on the wall, sampled 2x2 and averaged
               const dz = Math.min(.4, fpw / 1.2 * .25), du = Math.min(.4, dz * cellW / cellH), WH0 = WH, E0 = EMIT; let ne = 0, sb = base, sr = tr * base, sg = tg * base, sl = tb * base, sn = 1; const t0r = tr, t0g = tg, t0b = tb;   // (glass and its lead averaged together: glowing where most of it glows)
-              const nq = fpw < .08 ? 2 : 4; for (let q0 = 0; q0 < nq; q0++) { const q = nq === 2 ? q0 * 3 : q0, u2 = Math.min(.999, Math.max(.001, wx + (q & 1 ? du : -du))), vw2 = Math.max(0, vw + (q & 2 ? dz : -dz)), ly2 = Math.floor(vw2); WH = vw2; WT_RY = my;
+              const nq = 2; for (let q0 = 0; q0 < nq; q0++) { const q = nq === 2 ? q0 * 3 : q0, u2 = Math.min(.999, Math.max(.001, wx + (q & 1 ? du : -du))), vw2 = Math.max(0, vw + (q & 2 ? dz : -dz)), ly2 = Math.floor(vw2); WH = vw2; WT_RY = my;
                 const b2 = wallTex(hit, u2, hit === 6 || hit === 7 || hit === 12 ? vw2 / CHc : hit >= 10 && hit < 15 || hit >= 18 ? vw2 : vw2 - ly2, mx, hit >= 10 && hit < 12 || hit >= 18 ? my : hit === 12 ? my : my + ly2 * 57, side);
                 if (b2 >= 0 && !PANOHIT && !SKYTHRU) { sb += b2; sr += tr * b2; sg += tg * b2; sl += tb * b2; sn++; if (EMIT) ne++; } EMIT = false; PANOHIT = false; SKYTHRU = false; }
               EMIT = (ne + (E0 ? 1 : 0)) * 2 > sn; WH = WH0; base = sb / sn; if (sb > 1e-6) { tr = sr / sb; tg = sg / sb; tb = sl / sb; } else { tr = t0r; tg = t0g; tb = t0b; } } }
@@ -38270,9 +38270,9 @@ o=]#########=>
           if (!floor && !ceil2 && TBN) { let drawn = false;
             for (let q = 0; q < TBN && !drawn; q++) { if (yp < TBTOP[q]) continue; const hh = EYE - TBB[q] + (hor - yp) * TBP[q] / projPx, rd0 = RAY_D; RAY_D = TBP[q] * Math.hypot(rdx, rdy);
               let b2 = wallTex(TBT[q], TBU[q], CH - hh, TBM[q], TBY[q], TBS[q]); if (b2 < 0) { RAY_D = rd0; continue; } drawn = true; if (RF) PIXD[i] = TBP[q];
-              if (SURF_BARE && !PANOHIT && TBP[q] * SPKW > .03) {   // (v736) 2x2 over the footprint, averaged
+              if (SURF_BARE && !PANOHIT && TBP[q] * SPKW > .05) {   // (v736) 2x2 over the footprint, averaged
                 const dz = Math.min(.4, TBP[q] * SPKW / 1.2 * .25), du = Math.min(.4, dz * cellW / cellH), t0r = tr, t0g = tg, t0b = tb, E0 = EMIT; let ne = 0, sb = b2, sr = tr * b2, sg = tg * b2, sl = tb * b2, sn = 1;
-                const nk = TBP[q] * SPKW < .08 ? 2 : 4; for (let k0 = 0; k0 < nk; k0++) { const k2 = nk === 2 ? k0 * 3 : k0, c2 = wallTex(TBT[q], Math.min(.999, Math.max(.001, TBU[q] + (k2 & 1 ? du : -du))), CH - hh + (k2 & 2 ? dz : -dz), TBM[q], TBY[q], TBS[q]);
+                const nk = 2; for (let k0 = 0; k0 < nk; k0++) { const k2 = nk === 2 ? k0 * 3 : k0, c2 = wallTex(TBT[q], Math.min(.999, Math.max(.001, TBU[q] + (k2 & 1 ? du : -du))), CH - hh + (k2 & 2 ? dz : -dz), TBM[q], TBY[q], TBS[q]);
                   if (c2 >= 0 && !PANOHIT && !SKYTHRU) { sb += c2; sr += tr * c2; sg += tg * c2; sl += tb * c2; sn++; if (EMIT) ne++; } EMIT = false; PANOHIT = false; SKYTHRU = false; }
                 EMIT = (ne + (E0 ? 1 : 0)) * 2 > sn; b2 = sb / sn; if (sb > 1e-6) { tr = sr / sb; tg = sg / sb; tb = sl / sb; } else { tr = t0r; tg = t0g; tb = t0b; } }
               RAY_D = rd0; SHN = 1;
