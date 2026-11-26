@@ -2639,7 +2639,7 @@ o=]#########=>
     ACH = Math.max(5, Math.round(BH / rows)); ACW = Math.max(3, Math.round(ACH / 2));
     const fontDev = Math.max(5, Math.round(ACH / 1.18));
     ctx.font = `500 ${fontDev}px "Fira Mono", ui-monospace, Menlo, Consolas, monospace`;
-    if (glOK) { cv.width = BW; cv.height = BH; cellW = BW / cols; cellH = BH / rows; }
+    if (glOK) { if (cv.width !== BW) cv.width = BW; if (cv.height !== BH) cv.height = BH; cellW = BW / cols; cellH = BH / rows; }   // (v736) setting the size clears the canvas: only when it changes
     else { cellW = ACW; cellH = ACH; cv.width = cols * cellW; cv.height = rows * cellH; }   // the plain canvas draws whole pixels and is stretched
     scale = cv.width / vpW;
     // the lens keeps the view's height the same in every shape: a wider frame sees more to the sides, nothing is stretched
@@ -29244,7 +29244,7 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
-  const GAME_VERSION = 'v735';   // (v728) shown in the main menu's corner
+  const GAME_VERSION = 'v736';   // (v728) shown in the main menu's corner
   // (v729) the last few errors, kept in this browser and shown under the version, so a player can read them out
   const ERRN = { list: (() => { try { return JSON.parse(localStorage.getItem('glyph.errs') || '[]'); } catch (e) { return []; } })() };
   function noteErr(err, where) { try { const m = (err && (err.message || err.reason && err.reason.message || err.reason) || String(err)).toString().slice(0, 160), st = err && err.stack ? String(err.stack).split('\n').find(l => /:\d+:\d+/.test(l)) || '' : '', at = (st.match(/:(\d+):(\d+)\)?\s*$/) || []).slice(1).join(':');
@@ -31820,6 +31820,11 @@ o=]#########=>
     if (hz - pr.E < .07 || ax < .035 || Math.abs(ax - pr.hw * .55) < .03 || (Math.abs(ax - (hz - pr.E) * .6 - .1) < .03 && ax < pr.hw * .55)) { tr = 66; tg = 48; tb = 34; return .14 + h2(Math.floor(u * 20), Math.floor(hz * 20)) * .04; }
     tr = 178 + h2(pr.hb, 31) * 12; tg = 164; tb = 134; return .2 + sn2(u * 2.6, hz * 2.6) * .05;
   }
+  // (v736) a roof's slates and tiles averaged over the cell's footprint (2x2 and the centre), as the walls are
+  function roofSS(pr, u, w, sg, fp) { const b0 = roofSurf(pr, u, w, sg, fp); if (!SURF_BARE || fp < .03 || EMIT || b0 < 0) return b0;
+    const d = Math.min(.4, fp * .8), r0 = tr, g0 = tg, l0 = tb; let sb = b0, sr = tr * b0, sgc = tg * b0, sl = tb * b0, n = 1;
+    for (let k = 0; k < 4; k++) { EMIT = false; const c = roofSurf(pr, u + (k & 1 ? d : -d), w + (k & 2 ? d : -d), sg, fp); if (c >= 0 && !EMIT) { sb += c; sr += tr * c; sgc += tg * c; sl += tb * c; n++; } }
+    EMIT = false; if (sb > 1e-6) { tr = sr / sb; tg = sgc / sb; tb = sl / sb; } else { tr = r0; tg = g0; tb = l0; } return sb / n; }
   function drawRoofs(hor, dirX, dirY, plX, plY, projPx, light, tint) {
     const RS = G.roofs, near = RH.pr; near.length = 0;
     for (const pr of RS) { const cx = (pr.ex0 + pr.ex1) / 2 - P.x, cy = (pr.ey0 + pr.ey1) / 2 - P.y; if (cx * cx + cy * cy < 40 * 40 && cx * dirX + cy * dirY > -3) near.push(pr); }
@@ -31861,7 +31866,7 @@ o=]#########=>
         const u = pr.ry ? hx : hy, w = pr.ry ? hy : hx, sg = u >= pr.uc ? 1 : -1;
         EMIT = false; let b, k2 = 1;
         const fp = t * cellH / projPx;   // how much roof one letter covers
-        if (why === 1) b = roofSurf(pr, u, w, sg, fp);
+        if (why === 1) b = roofSS(pr, u, w, sg, fp);
         else if (why === 2) {   // under the overhang: the rafters' ends and the dark between them
           const raf = ((w * 3.1) % 1 + 1) % 1 < .22 && Math.abs(u - pr.uc) > pr.hw - .02; tr = 76; tg = 56; tb = 40; b = raf ? .1 : .035;
         } else if (why === 3 || why === 4) {   // the chimney stack and its cap
@@ -31882,7 +31887,7 @@ o=]#########=>
             if (pr.roofK === 'thatch') { tr = 150; tg = 124; tb = 78; b = .1 + sn2(w * 40, hz * 9) * .05 + (crossU ? 0 : -.02); }
             else { tr = 70; tg = 52; tb = 36; b = crossU ? .1 + (Math.abs(hz - (pr.R - pr.k * Math.abs(u - pr.uc)) + .02) < .02 ? .05 : 0) : .12 + (((hz * 9) % 1) < .1 ? -.04 : 0); }
             k2 = RH.ea[h] ? .78 : 1;
-          } else b = roofSurf(pr, u, w, sg, fp);
+          } else b = roofSS(pr, u, w, sg, fp);
         }
         if (RFDBG) (RFDBG[i] ||= []).push(['px', +b.toFixed(3), tr | 0, tg | 0, tb | 0, +u.toFixed(2), +w.toFixed(2), why, pr.roofK, +hz.toFixed(2)]);
         if (EMIT) { put(i, b, tr, tg, tb); continue; }
@@ -35752,7 +35757,7 @@ o=]#########=>
     if (NL_G !== G || frameNo - NL_T > 8 || !NL_L) { NL_G = G; NL_T = frameNo; const vis = G.vis, W = G.W, vs = render.vstamp > 1 ? render.vstamp - 1 : 0;   // (the last frame's: this one's rays have not gone out yet)
       const seen = l => { if (!vis || !vs) return true; const i = Math.floor(l.x), j = Math.floor(l.y); for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) { const k = (j + b) * W + i + a; if (k >= 0 && k < vis.length && (vis[k] === vs || vis[k] === vs + 1)) return true; } return false; };
       const was = NL_L && NL_G0 === G ? new Set(NL_L) : null; NL_G0 = G;
-      const sc = l => { const d2 = (l.x - P.x) ** 2 + (l.y - P.y) ** 2, s = d2 < 9 || seen(l) ? d2 : d2 * 4 + 400; return was && was.has(l) ? s * .6 : s; };   // (v702) the lit keep their place
+      const sc = l => { const d2 = (l.x - P.x) ** 2 + (l.y - P.y) ** 2, s = d2; void seen; return was && was.has(l) ? s * .6 : s; };   /* (v736) by distance alone: turning no longer swaps lamps in and out */   // (v702) the lit keep their place
       NL_L = G.statics.map(l => [sc(l), l]).sort((a, b) => a[0] - b[0]).slice(0, n).map(q => q[1]); }
     return NL_L;
   }
@@ -35947,8 +35952,23 @@ o=]#########=>
     let k = 0; if (SHN === 1) { k = (Math.sqrt(d2) * cellH / pp - .012) * 13; } else { const h = SHN === 2 ? (EYE_H || .5) : (CH_NOW || 2) - (EYE_H || .5); k = d2 * cellH / (h * pp) - .08; }
     if (k > 0 && j >= 0 && PFS[j] === SHN + (SHN === 1 ? (SNX > 0 ? 1 : SNX < 0 ? 2 : SNY > 0 ? 3 : 4) * 4 : 0) && PFST === PFSt[j]) { if (k > .7) k = .7; PFB += (PFT[j] - PFB) * k; PFR += (PFRr[j] - PFR) * k; PFG += (PFGg[j] - PFG) * k; PFBL += (PFBb[j] - PFBL) * k; }
     PFT[i] = PFB; PFRr[i] = PFR; PFGg[i] = PFG; PFBb[i] = PFBL; PFS[i] = SHN + (SHN === 1 ? (SNX > 0 ? 1 : SNX < 0 ? 2 : SNY > 0 ? 3 : 4) * 4 : 0); PFSt[i] = PFST; }
+  // (v736) a cell that covers more surface than a joint is wide shows the surface's local average instead of whichever joint
+  // or face its one sample happened to land on: the average runs along the screen row and down the column, per kind of surface (wall, floor,
+  // ceiling), and the detail fades into it as the cell's footprint grows (it starts at a footprint of .025 of a pace and is full by about .15)
+  let LODM = new Float32Array(1), LODS = new Uint32Array(1), LODF = 1;
+  function surfLod(i, base, wx, wy) {
+    const kd = SHN || 1, k = ((i / cols) | 0) * 4 + kd; if (LODS.length < rows * 4) { LODM = new Float32Array(rows * 4 + 8); LODS = new Uint32Array(rows * 4 + 8); }
+    const dx = wx - P.x, dy = wy - P.y, d2 = dx * dx + dy * dy, d = Math.sqrt(d2), fp = kd === 1 ? d * SPKW : Math.max(d * SPKW * .7, d2 * (kd === 2 ? SPKF : SPKC));
+    if (LODS[k] !== LODF) { LODS[k] = LODF; LODM[k] = base; }
+    const x = i % cols; if (x !== LCX || kd !== LCK || LCF !== LODF) { LCX = x; LCK = kd; LCF = LODF; LCM = base; }   // and down its column (a mortar line fills a whole row)
+    const ra = kd === 1 ? .3 : .2, mr = LODM[k] += (base - LODM[k]) * ra, mc = LCM += (base - LCM) * (ra + .05), m = (mr + mc) * .5;
+    let a = (fp - .025) / .13; if (a <= 0) return base; if (a > .9) a = .9; a = a * a * (3 - 2 * a);
+    return base + (m - base) * a;
+  }
+  let LCX = -1, LCK = 0, LCF = 0, LCM = 0, SSW = false;
   function shade(i, base, r, g, b, wx, wy, lv) {   // (v733) as in v700
     if (VEINK) { const d = wy - PRY(wx); if (d > -1 && d < 1) base *= 1 - VEINK * (1 - Math.abs(d)) * (.24 + .1 * Math.sin((wx - T * .6) * 2.1 + d * 3)); }
+    if (SURF_BARE) base = surfLod(i, base, wx, wy);   // (v736)
     let cr = lv * LT0 + AMB[0], cg = lv * LT1 + AMB[1], cb = lv * LT2 + AMB[2];
     for (let q = 0; q < LCN; q++) {
       const k = LCOL[q], dx = wx - LX[k], dy = wy - LY[k], d2 = dx * dx + dy * dy;
@@ -37812,16 +37832,17 @@ o=]#########=>
     { const n = cols * rows; DEFER = !!(glOK && RES && !NOCOMPOSE && !PORT_IN && !glLost);   // (v703)
       if (DEFER) { if (GC.length !== n) { GA = new Uint32Array(n); GB = new Uint32Array(n); GC = new Uint32Array(n); GD = new Uint32Array(n); DEFG = new Uint8Array(n); } else { GC.fill(0); DEFG.fill(0); } } }
     if (SURFM.length !== cols * rows) SURFM = new Uint8Array(cols * rows); else SURFM.fill(0);   // (v734)
+    LODF = (LODF + 1) >>> 0 || 1;   // (v736)
     if (PIXD.length === cols * rows) PIXD.fill(1e9); PFST = (PFST + 1) >>> 0 || 2;   // (v702)
     { const n = cols * rows; if (TXS.length !== n) { TXH = new Float32Array(n); TXX = new Float32Array(n); TXY = new Float32Array(n); TXZ = new Float32Array(n); TXS = new Uint32Array(n); TXQ = new Uint8Array(n); TXK = new Uint8Array(n); } TXST = (TXST + 1) >>> 0 || 2; }   // (v701)
     if (false) AMB = G.tavern || G.theme === 'tavern' ? [.03, .021, .012] : [.011, .016, .029];   // (v701)
-    const nlCap = G.cityK ? Math.min(NEAR_LIGHTS, 6) : NEAR_LIGHTS, nearStatics = G.statics.length > nlCap ? nearLights(nlCap) : G.statics;
+    const nlCap = G.cityK ? Math.min(NEAR_LIGHTS, 12) : NEAR_LIGHTS, nearStatics = G.statics.length > nlCap ? nearLights(nlCap) : G.statics;
     let lightsUse = nearStatics;
     if (G.statics.length > nlCap) {   // a light that falls out of the nearest few fades away over half a second instead of going out at once, and one coming in fades up
       const inSet = new Set(nearStatics), dtL = Math.min(.1, Math.max(.001, t - (render.lt || t))); render.lt = t; lightsUse = [];
-      for (const s of G.statics) { const w0 = s._w ?? (inSet.has(s) ? 1 : 0), w = inSet.has(s) ? Math.min(1, w0 + dtL * 2.2) : Math.max(0, w0 - dtL * 2.2); s._w = w; if (w > .01) lightsUse.push(s); }
+      for (const s of G.statics) { const w0 = s._w ?? (inSet.has(s) ? 1 : 0), w = inSet.has(s) ? Math.min(1, w0 + dtL * 1.1) : Math.max(0, w0 - dtL * 1.1);   /* (v736) slower */ s._w = w; if (w > .01) lightsUse.push(s); }
       if (lightsUse.length > nlCap + 6) lightsUse = lightsUse.sort((a, b) => b._w - a._w).slice(0, nlCap + 6); }
-    for (const s of lightsUse) LIGHTS.push({ ...s, i: s.i * (s._w ?? 1) * (s.flick ? .9 + .1 * Math.sin(t * 9 + s.x * 3) + .03 * Math.sin(t * 27.1 + s.y * 5.3) : 1) });
+    for (const s of lightsUse) LIGHTS.push({ ...s, i: s.i * (s._w ?? 1) * (s.flick ? .93 + .07 * sn2(t * 1.6 + s.x * 3.1, t * .9 + s.y * 5.3) : 1) });   // (v736) a slow sway
     for (const p of G.proj) { const c = ELCOL[p.el] || ELCOL.dark; LIGHTS.push({ x: p.x, y: p.y, r: c[0], g: c[1], b: c[2], i: p.el === 'fire' ? 1.3 : 1 }); }
     for (const f of G.flashes) { const c = ELCOL[f.el] || ELCOL.dark; LIGHTS.push({ x: f.x, y: f.y, r: c[0], g: c[1], b: c[2], i: 2.2 * f.t / .35 }); }
     { const gl = []; for (const e of G.ents) if (e.kind === 'mon' && MON[e.type] && MON[e.type].aura) { const d = Math.abs(e.x - P.x) + Math.abs(e.y - P.y); if (d < 9) gl.push([d, e]); }
@@ -37833,7 +37854,7 @@ o=]#########=>
     if (G.novas) for (const n of G.novas) { const a = (G.clock || 0) - n.t; if (a < 0 || a > n.dur + .3 || n.echo) continue; const c = ELCOL[n.el], k = Math.min(1, a / n.dur), rr = n.el === 'dark' ? n.R * (1 - k) : n.R * k;
       for (let q = 0; q < 6; q++) { const an = q / 6 * TAU; LIGHTS.push({ x: n.x + Math.cos(an) * rr, y: n.y + Math.sin(an) * rr, r: c[0], g: c[1], b: c[2], i: .9 * (1 - Math.max(0, a - n.dur) / .3), k: 1.6 }); } }
     if (INV3 && INV3.inR) inv3Lights(LIGHTS);   // (v724) the cards are lamps
-    if (LIGHTS.length > 18) LIGHTS.length = 18;
+    if (LIGHTS.length > 28) LIGHTS.length = 28;   // (v736)
     packLights();
 
     rtm('setup'); PT.a = performance.now(); TLX = -1; SKX = -1; if (TALLX.length < rows) TALLX = new Int32Array(rows + 8); TALLX.fill(-9); if (FARX.length < rows) { FARX = new Int32Array(rows + 8); FARK = new Int8Array(rows + 8); } FARX.fill(-9); if (LDFX.length < rows) { LDFX = new Int32Array(rows + 8); SKLX = new Int32Array(rows + 8); } LDFX.fill(-9); SKLX.fill(-9); FARCPU = cols / (2 * VK); { const lv = currentLevel(); FARMAXD = lv === 'lowest' ? 170 : lv === 'low' ? 210 : lv === 'medium' ? 270 : 340; } if (WALLX.length < rows) WALLX = new Int32Array(rows + 8); WALLX.fill(-9); WCELL = WCELLP = -1;
@@ -38197,11 +38218,18 @@ o=]#########=>
           if (G.cotK && vv > 1 && !cotCell(hit, mx, my) && hit !== 40) {   // below the house's own floor where the street falls away: its foundation, big rough stones
             const dz = (vv - 1) * CHc, al = WAX(wx, mx, my, side), by = Math.floor(dz / .13), bxx = Math.floor(al * 2.3 + (by & 1) * .5), ed = ((dz / .13) % 1) < .14 || (((al * 2.3 + (by & 1) * .5) % 1) + 1) % 1 < .07;
             EMIT = false; tr = 116 + h2(bxx, by) * 24; tg = 108 + h2(bxx, by) * 18; tb = 98; base = ed ? .06 : .15 + h2(bxx * 3, by) * .06; }
-          else { WT_RY = my; base = wallTex(hit, wx, hit === 6 || hit === 7 || hit === 12 ? vv : hit >= 10 && hit < 15 || hit >= 18 ? vv * CHc : vw - layer, mx, hit >= 10 && hit < 12 || hit >= 18 ? my : hit === 12 ? my : my + layer * 57, side); }
+          else { WT_RY = my; base = wallTex(hit, wx, hit === 6 || hit === 7 || hit === 12 ? vv : hit >= 10 && hit < 15 || hit >= 18 ? vv * CHc : vw - layer, mx, hit >= 10 && hit < 12 || hit >= 18 ? my : hit === 12 ? my : my + layer * 57, side); SSW = true; }
           // where a city wall's top is lower than the usual wall (a cottage's eaves, a merlon's gap), you see past it
           if (base < 0) { if ((G.tallH || G.cotK) && !PURG && (vv < .5 || SKYTHRU)) thru = true; else { base = .03; EMIT = false; } }
           if (!thru) {
             if (RF) PIXD[i] = perp; WALLX[y] = x;
+            if (SSW && SURF_BARE && !PANOHIT) { SSW = false; const fpw = perp * SPKW; if (fpw > .03) {   // (v736) the cell's footprint on the wall, sampled 2x2 and averaged
+              const dz = Math.min(.4, fpw / 1.2 * .25), du = Math.min(.4, dz * cellW / cellH), WH0 = WH, E0 = EMIT; let ne = 0, sb = base, sr = tr * base, sg = tg * base, sl = tb * base, sn = 1; const t0r = tr, t0g = tg, t0b = tb;   // (glass and its lead averaged together: glowing where most of it glows)
+              const nq = fpw < .08 ? 2 : 4; for (let q0 = 0; q0 < nq; q0++) { const q = nq === 2 ? q0 * 3 : q0, u2 = Math.min(.999, Math.max(.001, wx + (q & 1 ? du : -du))), vw2 = Math.max(0, vw + (q & 2 ? dz : -dz)), ly2 = Math.floor(vw2); WH = vw2; WT_RY = my;
+                const b2 = wallTex(hit, u2, hit === 6 || hit === 7 || hit === 12 ? vw2 / CHc : hit >= 10 && hit < 15 || hit >= 18 ? vw2 : vw2 - ly2, mx, hit >= 10 && hit < 12 || hit >= 18 ? my : hit === 12 ? my : my + ly2 * 57, side);
+                if (b2 >= 0 && !PANOHIT && !SKYTHRU) { sb += b2; sr += tr * b2; sg += tg * b2; sl += tb * b2; sn++; if (EMIT) ne++; } EMIT = false; PANOHIT = false; SKYTHRU = false; }
+              EMIT = (ne + (E0 ? 1 : 0)) * 2 > sn; WH = WH0; base = sb / sn; if (sb > 1e-6) { tr = sr / sb; tg = sg / sb; tb = sl / sb; } else { tr = t0r; tg = t0g; tb = t0b; } } }
+            SSW = false;
             if (EMIT) { if (PANOHIT) { gly[i] = PG; fgc[i] = PF; bgc[i] = PB; PANOHIT = false; } else put(i, base, tr, tg, tb); continue; }
             // far off, a wall's fine pattern (mortar, moss, pale flecks) is smaller than a letter: each cell catches one point of
             // it, and the least turn of the head changes which, so it sparkles. Past a few paces the pattern is drawn toward the
@@ -38224,10 +38252,16 @@ o=]#########=>
             if (yp > ctop) { const lf = h2(Math.floor(az * 180), Math.floor((top - yp) / Math.max(1, unit) * 9)), edge = (yp - ctop) / Math.max(1, ex * unit);
               if (edge > .12 || lf > .5) { const moon = edge < .3 && lf > .7 ? .05 : 0; put(i, .055 + moon + (lf > .8 ? .05 : lf * .03) * Math.min(1, edge * 3), 36 + moon * 600, 58 + moon * 700, 46 + moon * 700); continue; } }
           }
-          if (!floor && !ceil2 && TBN && (x & 1) && TALLX[y] === x - 1) { gly[i] = gly[i - 1]; SURFM[i] = SURFM[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); TALLX[y] = x; if (RF) PIXD[i] = PIXD[i - 1]; continue; }   // high up and far off: every other column copies its neighbour
+          if (false && !floor && !ceil2 && TBN && (x & 1) && TALLX[y] === x - 1) { gly[i] = gly[i - 1]; SURFM[i] = SURFM[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); TALLX[y] = x; if (RF) PIXD[i] = PIXD[i - 1]; continue; }   // high up and far off: every other column copies its neighbour
           if (!floor && !ceil2 && TBN) { let drawn = false;
             for (let q = 0; q < TBN && !drawn; q++) { if (yp < TBTOP[q]) continue; const hh = EYE - TBB[q] + (hor - yp) * TBP[q] / projPx, rd0 = RAY_D; RAY_D = TBP[q] * Math.hypot(rdx, rdy);
-              const b2 = wallTex(TBT[q], TBU[q], CH - hh, TBM[q], TBY[q], TBS[q]); RAY_D = rd0; if (b2 < 0) continue; drawn = true; if (RF) PIXD[i] = TBP[q];
+              let b2 = wallTex(TBT[q], TBU[q], CH - hh, TBM[q], TBY[q], TBS[q]); if (b2 < 0) { RAY_D = rd0; continue; } drawn = true; if (RF) PIXD[i] = TBP[q];
+              if (SURF_BARE && !PANOHIT && TBP[q] * SPKW > .03) {   // (v736) 2x2 over the footprint, averaged
+                const dz = Math.min(.4, TBP[q] * SPKW / 1.2 * .25), du = Math.min(.4, dz * cellW / cellH), t0r = tr, t0g = tg, t0b = tb, E0 = EMIT; let ne = 0, sb = b2, sr = tr * b2, sg = tg * b2, sl = tb * b2, sn = 1;
+                const nk = TBP[q] * SPKW < .08 ? 2 : 4; for (let k0 = 0; k0 < nk; k0++) { const k2 = nk === 2 ? k0 * 3 : k0, c2 = wallTex(TBT[q], Math.min(.999, Math.max(.001, TBU[q] + (k2 & 1 ? du : -du))), CH - hh + (k2 & 2 ? dz : -dz), TBM[q], TBY[q], TBS[q]);
+                  if (c2 >= 0 && !PANOHIT && !SKYTHRU) { sb += c2; sr += tr * c2; sg += tg * c2; sl += tb * c2; sn++; if (EMIT) ne++; } EMIT = false; PANOHIT = false; SKYTHRU = false; }
+                EMIT = (ne + (E0 ? 1 : 0)) * 2 > sn; b2 = sb / sn; if (sb > 1e-6) { tr = sr / sb; tg = sg / sb; tb = sl / sb; } else { tr = t0r; tg = t0g; tb = t0b; } }
+              RAY_D = rd0; SHN = 1;
               if (EMIT) { if (PANOHIT) { gly[i] = PG; fgc[i] = PF; bgc[i] = PB; PANOHIT = false; } else put(i, b2, tr, tg, tb); } else shade(i, b2 * (TBS[q] ? .8 : 1), tr * THM.tint[0], tg * THM.tint[1], tb * THM.tint[2], TBX[q], TBYY[q], light(TBP[q])); }
             if (drawn) { TALLX[y] = x; continue; } }
           if (!floor && !ceil2 && PANO_COL && panoPix(i, yp, hor, projPx, rdx, rdy)) { if (RF) PIXD[i] = 1e9; continue; }
@@ -38603,7 +38637,7 @@ o=]#########=>
     if (HG && G.sky && !CINE && OPT.rims && RF) rimPass();
     if (G.wells) drawWells(hor, dirX, dirY, plX, plY, projPx, light);
     if (G.mill) drawSails(hor, dirX, dirY, plX, plY, projPx, light);
-    CH_NOW = CH; if (G.roofs && G.cotK) { SURF = SURF_BARE ? 1 : 0; try { drawRoofs(hor, dirX, dirY, plX, plY, projPx, light, THM.tint); } finally { SURF = 0; } }   // (v734) bare
+    CH_NOW = CH; if (G.roofs && G.cotK) { SURF = SURF_BARE ? 1 : 0; SHN = 0; try { drawRoofs(hor, dirX, dirY, plX, plY, projPx, light, THM.tint); } finally { SURF = 0; } }   // (v734) bare
     if (G.boxes) drawBoxes(hor, dirX, dirY, plX, plY, projPx, light);
     rtm('boxes'); const inv = 1 / (plX * dirY - dirX * plY);
     const BARS = []; let aim = null; FOEBARS = []; EYES = [];
@@ -42470,7 +42504,7 @@ o=]#########=>
     requestAnimationFrame(frame);
   }
   window.claude?.hot?.snapshot?.(() => ((state === 'play' || state === 'paused') && P ? { P: { ...P, buffs: { ...P.buffs } }, depth: G.depth, tavern: G.tavern, alley: !!G.alley, outskirts: !!G.outskirts, gwOut: !!G.gwOut, testRoom: !!G.testRoom, arena: !!G.arena, cave: !!G.cave, secV: !!G.secV, purg: !!G.purg, shrineGate: !!G.shrineGate, lastChoice } : {}));
-  { let rq = 0; const re = () => { if (rq) return; rq = requestAnimationFrame(() => { rq = 0; resize(); if (typeof layoutPhone === 'function' && touchUI) layoutPhone(); if (state === 'player' && pmTab === 'map') drawFullMap(); }); };
+  { let rq = 0; const re = () => { if (rq) return; rq = requestAnimationFrame(() => { rq = 0; resize(); try { if (G && render.once && !glLost) render(performance.now() / 1000); } catch (e) { noteErr(e, 'redraw after resize'); } /* (v736) never show a cleared canvas */ if (typeof layoutPhone === 'function' && touchUI) layoutPhone(); if (state === 'player' && pmTab === 'map') drawFullMap(); }); };
     new ResizeObserver(re).observe(vp.parentElement);
     for (const id of FIT_IDS) { const el = document.getElementById(id); if (el) { new MutationObserver(fitOverlays).observe(el, { childList: true, subtree: true, characterData: true }); new MutationObserver(fitOverlays).observe(el, { attributes: true, attributeFilter: ['hidden', 'class'] }); new ResizeObserver(fitOverlays).observe(el); } } window.addEventListener('resize', re); if (window.visualViewport) visualViewport.addEventListener('resize', re);
     document.addEventListener('fullscreenchange', re); document.addEventListener('webkitfullscreenchange', re);
