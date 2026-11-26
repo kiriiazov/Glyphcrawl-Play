@@ -1699,7 +1699,7 @@
         float off = s2 * uCell.x * .16;
         vec3 col; if (off > .35 && uLoQ < .5) { float cr = cellAt(px + vec2(off, 0.0)).r, cb = cellAt(px - vec2(off, 0.0)).b; col = cellAt(px); col.r = cr; col.b = cb; } else col = cellAt(px);
         // far letters soften into the tone of their own cells
-        col = mix(col, grade(av.bgr, cell), s2 * .22);   // (v710) less: crisper
+        col = mix(col, grade(av.bgr, cell), s2 * .42);   // (v710) less: crisper
         if (uCine.x > 0.0) col = cine(col, px, t, av.bgr);
         // phosphor glow: bright cells bleed light into their neighbours, a little up close and more far off
         if (uCine.x <= 0.0) { vec2 du = 1.3 / uGrid, dd = du * 1.6;
@@ -1712,11 +1712,11 @@
         // and phones), sharp bent lines fold into rings when the picture is resized; a wave has no fine detail to fold. The lines are
         // lighter over the sky and the farthest distance, where rings showed most, and softer where they are packed tightly
         float per = uCell.y / uCrt.z, ph = fract(px.y / per) - .5, beam = .5 + .5 * cos(6.2831853 * ph), base = mix(.56, .86, L);
-        col *= mix(1.0, base + (1.0 - base) * beam, s * .22 * smoothstep(2.2, 5.0, per) * mix(1.0, .55, smoothstep(.96, 1.0, t)));
+        col *= mix(1.0, base + (1.0 - base) * beam, s * .75 * smoothstep(2.2, 5.0, per) * mix(1.0, .55, smoothstep(.96, 1.0, t)));
         // the aperture grille, on the glass itself: fine red, green and blue stripes, seen most on bright things
         float m = fract(frag.x / uCrt.w) * 3.0;
         vec3 mk = vec3(.62) + .38 * vec3(1.0 - step(1.0, m), step(1.0, m) - step(2.0, m), step(2.0, m));
-        col *= mix(vec3(1.0), mk * 1.2, s * .0 * (.35 + .65 * L));   // (v711) no aperture grille
+        col *= mix(vec3(1.0), mk * 1.2, s * .36 * (.35 + .65 * L));   // (v711) no aperture grille
         // the glass darkens toward its rim
         if (uCine.x > 0.0) col = film(col, frag);
         col *= 1.0 - .04 * uCrt.y * dot(q, q);
@@ -2091,13 +2091,13 @@
   // (v730) light graphics mode: fewer pixels and no glow passes, for GPUs that drop the game
   const LIGHTGL = (() => { try { return localStorage.getItem('glyph.lightGL') === '1'; } catch (e) { return false; } })();
   try { const x = GL && GL.getExtension('WEBGL_debug_renderer_info'); window.__gpu = GL ? (x ? GL.getParameter(x.UNMASKED_RENDERER_WEBGL) : GL.getParameter(GL.RENDERER)) : 'none (no WebGL)'; } catch (_) {}   // (v731) for the report
-  if (GL) { try { glInit(); glOK = true; if (LIGHTGL) RES = null; } catch (e) { console.warn('WebGL setup failed, using the slower renderer', e); } }   // (v732) light mode: the CPU lights the frame
+  if (GL) { try { glInit(); glOK = true; RES = null; /* (v733) the CPU lights the frame, as in v700 */ } catch (e) { console.warn('WebGL setup failed, using the slower renderer', e); } }   // (v732) light mode: the CPU lights the frame
   // the graphics driver can drop the WebGL context (a GPU reset, the tab put to sleep, a driver hiccup): the browser then shows
   // a blank canvas. Ask for it back, and when it returns rebuild the shader, textures and glyph atlas and carry on.
   cv.addEventListener('webglcontextlost', e => { e.preventDefault(); glLost = true; console.warn('WebGL context lost; waiting for it to come back');
     try { noteErr(new Error('WebGL context lost' + (LIGHTGL ? ' (light mode)' : '')), 'webgl ' + state); } catch (_) {}
     setTimeout(() => { if (!LIGHTGL || glLost) glLostRecover(); }, LIGHTGL ? 2000 : 300); });   // (v732) outside light mode: always, at once
-  cv.addEventListener('webglcontextrestored', () => { try { glInit(); if (LIGHTGL) RES = null; glLost = false; glOK = true; resize(); } catch (e) { console.warn('WebGL restore failed', e); } });
+  cv.addEventListener('webglcontextrestored', () => { try { glInit(); RES = null; glLost = false; glOK = true; resize(); } catch (e) { console.warn('WebGL restore failed', e); } });
   function glLostRecover() {   // (v730) the GPU did not give the frame back: go to light mode, by reloading
     try { localStorage.setItem('glyph.lightGL', '1'); } catch (_) {}
     if (!LIGHTGL && (state === 'menu' || state === 'create')) { location.reload(); return; }   // (v731) once only: in light mode, the card
@@ -2419,8 +2419,8 @@ o=]#########=>
     lowest: { rows: 36, '4:3': 96, '16:9': 128, '21:9': 168 },
     low:    { rows: 45, '4:3': 120, '16:9': 160, '21:9': 210 },
     medium: { rows: 54, '4:3': 144, '16:9': 192, '21:9': 252 },
-    high:   { rows: 39, '4:3': 104, '16:9': 138, '21:9': 182 },   // (v708) a twelfth of Ultra's letters, for phones at 60 fps   // (v701: the sharp fine still is the target; was 63 rows)   // (v697: was 72 rows; Ultra was 90; the camp 108 and 72)
-    ultra:  { rows: 54, '4:3': 144, '16:9': 192, '21:9': 252 },   // (v719) 192 x 54: letters a little smaller than High's (138 x 39)   // (v709) 288 x 81: 2.8 times fewer letters than v701-v708's 480 x 135   // (v701: no more letters than High; Ultra's extras are light, not letters)
+    high:   { rows: 63, '4:3': 168, '16:9': 224, '21:9': 294 },   // (v733) back to v700
+    ultra:  { rows: 72, '4:3': 192, '16:9': 256, '21:9': 336 },   // (v733) back to v700
     camp:   { rows: 81, '4:3': 216, '16:9': 288, '21:9': 378 },   // (v705) the creation camp keeps its own lighter grid (desktop)
     campPh: { rows: 60, '4:3': 160, '16:9': 213, '21:9': 280 },    // and on a phone
     menu:   { rows: 108, '4:3': 288, '16:9': 384, '21:9': 504 },   // (v727) the title scene: one slow view, so it can afford fine letters
@@ -2429,24 +2429,24 @@ o=]#########=>
   // (v727) the grid the frame wants now: the title and the camp keep their own finer ones, the game follows the detail level
   function wantGrid() {
     const ph = typeof phoneFrame === 'function' && phoneFrame();
-    if (CAMP_FINE) return ph ? GRID[currentLevel()] || GRID.high : GRID.camp;
+    if (CAMP_FINE) return ph ? GRID.campPh : GRID.camp;   // (v733) as in v700
     if (state === 'menu' || (state === 'create' && !CAMP)) return ph ? GRID.menuPh : GRID.menu;
     return GRID[currentLevel()] || GRID.ultra;
   }
-  const DETAIL_ROWS = { lowest: 36, low: 45, medium: 54, high: 39, ultra: 54 };
-  const CRT_LINES = { lowest: 2, low: 2, medium: 3, high: 3, ultra: 3 };   // scanlines per row of letters
+  const DETAIL_ROWS = { lowest: 36, low: 45, medium: 54, high: 63, ultra: 72 };
+  const CRT_LINES = { lowest: 2, low: 2, medium: 3, high: 3, ultra: 4 };   // scanlines per row of letters
   const CRT_MASKP = { lowest: 6, low: 5, medium: 4, high: 3, ultra: 3 };   // aperture grille: device pixels per red-green-blue stripe set
   const ASPECTS = SHAPES;
-  let aspect = '16:9', crtAmt = .32, crtCurve = 1, CRT_DEPTH = false, cineAmt = .8, cineRelief = 1;
+  let aspect = '16:9', crtAmt = 1, crtCurve = 1, CRT_DEPTH = false, cineAmt = .8, cineRelief = 1;
   try { if (localStorage.getItem('glyph.lightGL') === '1') cineAmt = 0; } catch (_) {}   // (v730) light mode: no glow passes
   try { const a = localStorage.getItem('glyph.aspect'); if (a && a in ASPECTS) aspect = a;
     const v = localStorage.getItem('glyph.curve'); if (v !== null) crtCurve = v === '0' ? 0 : 1;
     } catch (e) {}   // (v697) the glass, the light and the raised letters are one look, not settings
   const DETAIL_ORDER = ['lowest', 'low', 'medium', 'high', 'ultra'];
   // (v708) two settings again: High (phones) and Ultra. A phone starts on High, anything else on Ultra; the choice is kept
-  let detail = (() => { try { const v = localStorage.getItem('glyph.gfx'); if (v === 'high' || v === 'ultra') return v; } catch (_) {}
-    const touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches); return touch && Math.min(screen.width || 9999, screen.height || 9999) < 600 ? 'high' : 'ultra'; })(), autoLevel = 'ultra';
-  const LOWQ = () => detail === 'high';   // (v708) High also draws its light more simply
+  let detail = 'auto', autoLevel = (window.matchMedia && matchMedia('(pointer: coarse)').matches) ? 'low' : 'high';   // (v733) v700's levels
+  try { const d = localStorage.getItem('glyphcrawl.detail'); if (d && (d === 'auto' || DETAIL[d])) detail = d; } catch (e) {}
+  const LOWQ = () => false;   // (v708) High also draws its light more simply
   let cols = 192, rows = 54, cellW = 7, cellH = 14, ACW = 7, ACH = 14, scale = 1, vpW = 1280, vpH = 720, FRAME_PROF = 'desk', FRAME_FS = 1, PORTRAIT = false;
   let FRAME_TOUCH = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
   const COARSE = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
@@ -2454,7 +2454,7 @@ o=]#########=>
   const WEBKIT = (() => { try { const u = navigator.userAgent || ''; return /AppleWebKit/.test(u) && !/Chrome\/|Chromium|Edg\/|Android/.test(u); } catch (e) { return false; } })();
   // phones draw the wood a little lighter: at most three trunks layered along a ray (five on a desktop) and the eight nearest
   // standing lights rather than ten; the murk hides the difference
-  const TREE_MAX = COARSE ? 3 : 5, NEAR_LIGHTS = 18;   // (v702: one setting everywhere; was 9 on a phone, 13 on a desktop)
+  const TREE_MAX = COARSE ? 3 : 5, NEAR_LIGHTS = COARSE ? 9 : 13;   // (v702: one setting everywhere; was 9 on a phone, 13 on a desktop)
   let gmask = new Uint8Array(0), gsnapF = null, gsnapB = null, CAMPM = null;   // (v527: CAMPM, which camp figure drew each cell)   // cells the colour grade leaves alone (your hands)
   let gly = new Uint8Array(1), fgc = new Uint32Array(1), bgc = new Uint32Array(1), vig = new Float32Array(1), zbuf = new Float32Array(1), ZL = new Float32Array(1), ZLT = new Float32Array(1);
   let bR = new Float32Array(1), bG = new Float32Array(1), bB = new Float32Array(1), tR = new Float32Array(1), tG = new Float32Array(1), tB = new Float32Array(1);
@@ -2482,7 +2482,7 @@ o=]#########=>
   // (v701) light first, letters last: the letter is chosen by what the surface is (tex, its texture, which belongs to the
   // world and so holds still as you move), the light only colours it. Overall the cell keeps the brightness the old ramp
   // gave it: a dense letter in the dark is drawn dim, a sparse one in bright light is drawn hot
-  const MESHLESS = true; const TEXK = 1.1, BGK = MESHLESS ? 1.22 : .82, TEXQ = 7, TXA = .4; let MIXB = 1, LASTQ = .5;   // (v709) MIXB: the letter by brightness   // (v702) TXR is now per cell: what a cell spans of its surface (TXRV)
+  const MESHLESS = false; const TEXK = 1.1, BGK = MESHLESS ? 1.22 : .82, TEXQ = 7, TXA = .4; let MIXB = 1, LASTQ = .5;   // (v709) MIXB: the letter by brightness   // (v702) TXR is now per cell: what a cell spans of its surface (TXRV)
   // each cell's memory of the surface it showed last frame: its texture value, the world point it came from, its step.
   // A seam or a fleck thinner than a letter is caught by a cell one frame and missed the next; at nearly the same spot
   // of the world the cell eases toward the new value instead, and only takes another step when clearly past the old one.
@@ -2519,7 +2519,7 @@ o=]#########=>
   const HAZE0 = 6;   // (v710) where the haze starts (it is full at three times this)
   // (v719) PIXEL: surfaces as pixels, letters near. Surfaces: letters come in from PIX_N1 paces to full at PIX_N0. Figures and
   // things: a few letters on their brightest accents from afar (FIG_FAR), all of them from FIG_N1 to full at FIG_N0
-  const PIXEL = true, PIX_N0 = 2, PIX_N1 = 7, FIG_N0 = 2.5, FIG_N1 = 7.5, FIG_FAR = .45; /* (v722) .4 */ /* (v720) further */ let PXD = -1;
+  const PIXEL = false, PIX_N0 = 2, PIX_N1 = 7, FIG_N0 = 2.5, FIG_N1 = 7.5, FIG_FAR = .45; /* (v722) .4 */ /* (v720) further */ let PXD = -1;
   let DEFER = false, GA = new Uint32Array(1), GB = new Uint32Array(1), GC = new Uint32Array(1), GD = new Uint32Array(1), DEFG = new Uint8Array(1);
   function glyphL(i, tex) {
     let tq = tex * TEXK; tq = tq > 1 ? 1 : tq < .02 ? .02 : tq; let q;
@@ -2553,7 +2553,8 @@ o=]#########=>
     if (bg) bgc[i] = pack(bg[0], bg[1], bg[2]);
   }
   // (v710) the sky in one column of two: the odd column copies the even one beside it (its stars too, so a star is a pair)
-  function skyCopy(i, x, y) { if (!OPT.stride) return false; if ((x & 1) && SKLX[y] === x - 1) { gly[i] = gly[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFG[i]) DEFG[i] = 0; if (SKYM.length > i) SKYM[i] = SKYM[i - 1]; SKLX[y] = -9; return true; } SKLX[y] = x; return false; }
+  function skyCopy(i, x, y) { return false;   // (v733) off
+    if (!OPT.stride) return false; if ((x & 1) && SKLX[y] === x - 1) { gly[i] = gly[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFG[i]) DEFG[i] = 0; if (SKYM.length > i) SKYM[i] = SKYM[i - 1]; SKLX[y] = -9; return true; } SKLX[y] = x; return false; }
   function blank(i, bg) { if (DEFG[i]) DEFG[i] = 0; gly[i] = 0; bgc[i] = bg ? pack(bg[0], bg[1], bg[2]) : 0; }
   function h2(x, y) {
     let n = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263)) | 0;
@@ -2564,7 +2565,7 @@ o=]#########=>
   const R = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  let COVV = 0; const RAMP_CLEAN = true;
+  let COVV = 0; const RAMP_CLEAN = false;
   function buildGlyphs(fontDev) { COVV++;
     const cellW = ACW, cellH = ACH;   // (v598) the atlas is built at whole pixels; the screen cell may be a fraction
     const c = document.createElement('canvas'); c.width = cellW; c.height = cellH;
@@ -2591,7 +2592,7 @@ o=]#########=>
     }
     // the open ground drawn in letters that lie flat (so the land reads as a floor running away from you, not a wall of
     // speckle), and the roads in a stipple of their own; each ramp spread over the same brightness as the full one
-    for (const [A, cand] of [[LUTF, " .,'`:"], [LUTR, " .,:;!i"]]) { const ls = [...new Set(cand.split(''))].map(ch => ch.charCodeAt(0) - 32).sort((a, b) => COVN[a] - COVN[b]), mx = COVN[ls[ls.length - 1]];
+    for (const [A, cand] of [[LUTF, " .,-_~="], [LUTR, " .,:;i="]]) { const ls = [...new Set(cand.split(''))].map(ch => ch.charCodeAt(0) - 32).sort((a, b) => COVN[a] - COVN[b]), mx = COVN[ls[ls.length - 1]];
       for (let k = 0; k < 256; k++) { const target = Math.pow(k / 255, .9) * COVN[list[list.length - 1]]; let best = ls[1], bd = 9; for (const q of ls) { if (!q) continue; const dd = Math.abs(Math.min(COVN[q], mx) - Math.min(target, mx * 1.15)); if (dd < bd) { bd = dd; best = q; } } A[k] = best; } }
   }
 
@@ -2747,7 +2748,7 @@ o=]#########=>
       const gx = ((S2[i + 1 - cols] + 2 * S2[i + 1] + S2[i + 1 + cols]) - (S2[i - 1 - cols] + 2 * S2[i - 1] + S2[i - 1 + cols])) * sw * .125;
       const gy = ((S2[i + cols - 1] + 2 * S2[i + cols] + S2[i + cols + 1]) - (S2[i - cols - 1] + 2 * S2[i - cols] + S2[i - cols + 1])) * sh * .125;
       const ex = gx * cellW, ey = gy * cellH; GX[i] = gx; GY[i] = gy; E[i] = Math.sqrt(ex * ex + ey * ey); }
-    const TC = lv === 2 ? .1 : .125, TA = .045, OFFK = .62;   // (v710) shapes, not texture   // on at full strength; once on, stays on down to 62% of it
+    const TC = lv === 2 ? .065 : .085, TA = .03, OFFK = .62;   // (v710) shapes, not texture   // on at full strength; once on, stays on down to 62% of it
     if (INK_NX.length !== n) INK_NX = new Uint8Array(n); else INK_NX.fill(0); const NX = INK_NX;
     for (let y = 2; y < rows - 2; y++) for (let x = 2; x < cols - 2; x++) { const i = y * cols + x, e = E[i];
       const was = PV[i], th = Math.max(TA, TC * (S2[i] + .15)) * (was ? OFFK : 1);
@@ -29164,22 +29165,16 @@ o=]#########=>
     const seg = () => ['auto', ...DETAIL_ORDER].map(d => `<button data-d="${d}" aria-pressed="${d === detail}">${d === 'auto' ? 'Auto (' + autoLevel + ')' : d}</button>`).join('');
     const aseg = () => Object.keys(SHAPES).map(a => `<button data-a="${a}" aria-pressed="${a === aspect}">${a}</button>`).join('');
     ov.innerHTML = `<div class="card settings"><h2>Graphics</h2>
-      <div class="detail"><span>Quality</span><div class="seg" id="qualSeg"><button data-q="high" aria-pressed="${detail === 'high'}">High</button><button data-q="ultra" aria-pressed="${detail === 'ultra'}">Ultra</button></div></div>
-      <p class="muted">High draws larger letters and simpler light, for phones. Ultra is the full picture.</p>
+      <div class="detail"><span>Detail</span><div class="seg" id="detailSeg">${seg()}</div></div>
       <div class="detail"><span>Screen shape</span><div class="seg" id="aspectSeg">${aseg()}</div></div>
       <p class="muted" id="gfxRows"></p>
       <div class="detail"><span>Curved glass</span><div class="seg" id="curveSeg"><button data-c="1" aria-pressed="${!!crtCurve}">On</button><button data-c="0" aria-pressed="${!crtCurve}">Off</button></div></div>
       <div class="detail"><span>Frame rate</span><div class="seg" id="fpsSeg"><button data-f="1" aria-pressed="${FPS_ON}">On</button><button data-f="0" aria-pressed="${!FPS_ON}">Off</button></div></div>
       <div class="detail"><span>Camera motion</span><div class="seg" id="camSeg"><button data-m="1" aria-pressed="${camMotion}">On</button><button data-m="0" aria-pressed="${!camMotion}">Off</button></div></div>
-      <p class="muted">The glass is strong on what is far off and faint up close.</p>
+      <p class="muted">Higher detail draws more letters, a finer glass and more of the light. The glass is strong on what is far off and faint up close. Lower detail is smoother on phones and older machines.</p>
       <div class="btns"><button class="btn" id="setBack">Back</button></div></div>`;
     const rowsNote = () => { const el = document.getElementById('gfxRows'); if (el) el.textContent = `${cols} × ${rows} letters`; };
     rowsNote();
-    document.querySelectorAll('#qualSeg button').forEach(b => b.onclick = () => {   // (v708)
-      detail = b.dataset.q; try { localStorage.setItem('glyph.gfx', detail); } catch (e) {}
-      document.querySelectorAll('#qualSeg button').forEach(x => x.setAttribute('aria-pressed', x.dataset.q === detail));
-      resize(); rowsNote();
-    });
     document.querySelectorAll('#aspectSeg button').forEach(b => b.onclick = () => {
       aspect = b.dataset.a; try { localStorage.setItem('glyph.aspect', aspect); } catch (e) {}
       document.querySelectorAll('#aspectSeg button').forEach(x => x.setAttribute('aria-pressed', x.dataset.a === aspect));
@@ -29196,7 +29191,7 @@ o=]#########=>
       document.querySelectorAll('#curveSeg button').forEach(x => x.setAttribute('aria-pressed', +x.dataset.c === crtCurve));
     });
     document.querySelectorAll('#detailSeg button').forEach(b => b.onclick = () => {
-      detail = 'ultra';
+      detail = b.dataset.d; if (detail === 'auto') autoLevel = (window.matchMedia && matchMedia('(pointer: coarse)').matches) ? 'low' : 'high';
       try { localStorage.setItem('glyphcrawl.detail', detail); } catch (e) {}
       document.querySelectorAll('#detailSeg button').forEach(x => x.setAttribute('aria-pressed', x.dataset.d === detail));
       resize(); rowsNote();
@@ -29231,7 +29226,7 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
-  const GAME_VERSION = 'v732';   // (v728) shown in the main menu's corner
+  const GAME_VERSION = 'v733';   // (v728) shown in the main menu's corner
   // (v729) the last few errors, kept in this browser and shown under the version, so a player can read them out
   const ERRN = { list: (() => { try { return JSON.parse(localStorage.getItem('glyph.errs') || '[]'); } catch (e) { return []; } })() };
   function noteErr(err, where) { try { const m = (err && (err.message || err.reason && err.reason.message || err.reason) || String(err)).toString().slice(0, 160), st = err && err.stack ? String(err.stack).split('\n').find(l => /:\d+:\d+/.test(l)) || '' : '', at = (st.match(/:(\d+):(\d+)\)?\s*$/) || []).slice(1).join(':');
@@ -31438,7 +31433,7 @@ o=]#########=>
   const KT = new Float32Array(8), KO = new Float32Array(8), KC = new Float32Array(8), KH = new Float32Array(8), KQ = new Float32Array(8), KX = new Float32Array(8), KY = new Float32Array(8);   // tree crowns a ray passes under (open sky only)
   const CTOP = new Float32Array(5), CBOT = new Float32Array(5);
   // tall city walls seen over lower ones: for each column, up to four walls (nearest first, each rising higher than the last)
-  let TALLX = new Int32Array(512); let FARX = new Int32Array(512), FARK = new Int8Array(512), FARCPU = 0, WALLX = new Int32Array(512), WCELL = -1, WCELLP = -1; const OPT = { stride: true, skip: true, fast: true, walkCue: true, rims: true, ramp: true }; let LDFX = new Int32Array(512), SKLX = new Int32Array(512); const LOD1 = 7.5, LOD2 = 15;   // (v710) far off, fewer letters   // (switches for the open-land savings, to measure them against their absence)   // per row, the last column whose far ground was worked out in full (the next one may copy it)
+  let TALLX = new Int32Array(512); let FARX = new Int32Array(512), FARK = new Int8Array(512), FARCPU = 0, WALLX = new Int32Array(512), WCELL = -1, WCELLP = -1; const OPT = { stride: true, skip: true, fast: true, walkCue: true, rims: true, ramp: true }; let LDFX = new Int32Array(512), SKLX = new Int32Array(512); const LOD1 = 1e9, LOD2 = 1e9;   /* (v733) off */   // (v710) far off, fewer letters   // (switches for the open-land savings, to measure them against their absence)   // per row, the last column whose far ground was worked out in full (the next one may copy it)
   const TBP = new Float32Array(4), TBT = new Uint8Array(4), TBU = new Float32Array(4), TBM = new Int32Array(4), TBY = new Int32Array(4), TBS = new Uint8Array(4), TBTOP = new Float32Array(4), TBX = new Float32Array(4), TBYY = new Float32Array(4);
   const LWP = new Float32Array(6), LWS = new Uint8Array(6), LWT = new Uint8Array(6), LWH = new Float32Array(6), LWTOP = new Float32Array(6), LWBOT = new Float32Array(6), LWA = new Float32Array(6), LWL = new Float32Array(6);
   // one pixel of a low wall (a palisade or a ruined wall): true if the wall covers it and it was drawn
@@ -35719,7 +35714,7 @@ o=]#########=>
     return NL_L;
   }
   const LTL = new Float32Array(32), LIK = .8;   // (v702: the gentler reach adds light everywhere; each light is a little dimmer at its heart)
-  function packLights() { LN = Math.min(32, LIGHTS.length); for (let k = 0; k < LN; k++) { const l = LIGHTS[k], kk = l.k || 1; LX[k] = l.x; LY[k] = l.y; LC[k] = 28 / kk; LI[k] = l.i * LIK; LK2[k] = .55 * kk; LTL[k] = 1 / (1 + LC[k] * LK2[k]); LRr[k] = l.r; LGg[k] = l.g; LBb[k] = l.b; LCOL[k] = k; } LCN = LN; }
+  function packLights() { LN = Math.min(32, LIGHTS.length); for (let k = 0; k < LN; k++) { const l = LIGHTS[k], kk = l.k || 1; LX[k] = l.x; LY[k] = l.y; LC[k] = 12 / kk; LI[k] = l.i; LK2[k] = 2 * kk; LTL[k] = 1 / (1 + LC[k] * LK2[k]); LRr[k] = l.r; LGg[k] = l.g; LBb[k] = l.b; LCOL[k] = k; } LCN = LN; }
   // every pixel of a screen column lies on that column's ray across the map, so a light whose reach the ray never crosses
   // can't touch any of them: each column keeps only the lights its ray passes near
   const LCOL = new Int8Array(32); let LCN = 0;
@@ -35909,40 +35904,22 @@ o=]#########=>
     let k = 0; if (SHN === 1) { k = (Math.sqrt(d2) * cellH / pp - .012) * 13; } else { const h = SHN === 2 ? (EYE_H || .5) : (CH_NOW || 2) - (EYE_H || .5); k = d2 * cellH / (h * pp) - .08; }
     if (k > 0 && j >= 0 && PFS[j] === SHN + (SHN === 1 ? (SNX > 0 ? 1 : SNX < 0 ? 2 : SNY > 0 ? 3 : 4) * 4 : 0) && PFST === PFSt[j]) { if (k > .7) k = .7; PFB += (PFT[j] - PFB) * k; PFR += (PFRr[j] - PFR) * k; PFG += (PFGg[j] - PFG) * k; PFBL += (PFBb[j] - PFBL) * k; }
     PFT[i] = PFB; PFRr[i] = PFR; PFGg[i] = PFG; PFBb[i] = PFBL; PFS[i] = SHN + (SHN === 1 ? (SNX > 0 ? 1 : SNX < 0 ? 2 : SNY > 0 ? 3 : 4) * 4 : 0); PFSt[i] = PFST; }
-  function shade(i, base, r, g, b, wx, wy, lv) {
+  function shade(i, base, r, g, b, wx, wy, lv) {   // (v733) as in v700
     if (VEINK) { const d = wy - PRY(wx); if (d > -1 && d < 1) base *= 1 - VEINK * (1 - Math.abs(d)) * (.24 + .1 * Math.sin((wx - T * .6) * 2.1 + d * 3)); }
-    PFB = base; PFR = r; PFG = g; PFBL = b; PFWX = wx; PFWY = wy;
-    if (SHN) { LZC = (CH_NOW || 2) - LZ; lv *= .45 + .55 * lamb(P.x, P.y, EYE_H, wx, wy) * LGAIN; }
-    if (DEFER) {   // (v703)
-      const dx = wx - P.x, dy = wy - P.y, d2 = dx * dx + dy * dy, kind = SHN === 1 ? (SNX > 0 ? 1 : SNX < 0 ? 2 : SNY > 0 ? 3 : 4) : SHN === 2 ? 5 : SHN === 3 ? 6 : 7;
-      if (FOGK) { const f = (HAZE ? FOGTS[Math.min(4095, (d2 * .5) | 0)] : FOGT[Math.min(1023, (d2 * 2) | 0)]) * FOGD;
-        TXON = false; deferL(i, base, base * (1 - f) + .12 * f, r, g, b, wx, wy, lv, kind, f); return; }
-      TXRV = SHN === 1 ? Math.sqrt(d2) * SPKW : d2 * (SHN === 2 ? SPKF : SPKC) + .004;
-      PFF(i); TXON = true; TXWX = wx; TXWY = wy; TXWK = SHN === 1 ? 1 + kind : SHN + 8; TXWZ = SHN === 1 ? WH : 0;
-      deferL(i, PFB, PFB, PFR, PFG, PFBL, wx, wy, lv, kind, 0); TXON = false; return; }
-    let cr, cg, cb;
-    if (SHN === 1 && wx === SWX && wy === SWY && lv === SWL && SWF === render.vstamp) { cr = SWR; cg = SWG; cb = SWB; }   // (v702) same wall point as the cell above
-    else { cr = lv * LT0 + AMB[0]; cg = lv * LT1 + AMB[1]; cb = lv * LT2 + AMB[2];
+    let cr = lv * LT0 + AMB[0], cg = lv * LT1 + AMB[1], cb = lv * LT2 + AMB[2];
     for (let q = 0; q < LCN; q++) {
       const k = LCOL[q], dx = wx - LX[k], dy = wy - LY[k], d2 = dx * dx + dy * dy;
-      if (d2 < LC[k]) { let a = LI[k] * (1 / (1 + d2 * LK2[k]) - LTL[k]);
-        if (SHN === 1) { const nd = -(dx * SNX + dy * SNY); a *= nd > 0 ? (.4 + .6 * nd / Math.sqrt(d2 + 1e-6)) * LGAIN : .4 * LGAIN; }   // (inline: this runs for every light on every cell)
-        else if (SHN) { const h = SHN === 2 ? LZ : LZC; a *= (.38 + .62 * h / Math.sqrt(d2 + h * h)) * LGAIN; }
-        cr += LRr[k] * a; cg += LGg[k] * a; cb += LBb[k] * a; }
+      if (d2 < LC[k]) { const a = LI[k] * (1 / (1 + d2 * LK2[k]) - LTL[k]); cr += LRr[k] * a; cg += LGg[k] * a; cb += LBb[k] * a; }
     }
-    if (SHN === 1) { SWX = wx; SWY = wy; SWL = lv; SWF = render.vstamp; SWR = cr; SWG = cg; SWB = cb; } }
     let lum = Math.max(cr, cg, cb) * .6 + (cr + cg + cb) * .133;
     if (lum > .75) lum = .75 + (1 - Math.exp(-(lum - .75) * 2)) * .35;
     if (FOGK) {
       // swamp mist: the farther a thing is, the more it melts into a pale green haze
       const dx = wx - P.x, dy = wy - P.y, f = (HAZE ? FOGTS[Math.min(4095, ((dx * dx + dy * dy) * .5) | 0)] : FOGT[Math.min(1023, ((dx * dx + dy * dy) * 2) | 0)]) * FOGD, b1 = base * lum * (1 - f), b2 = FOGB * f, bt = b1 + b2 || 1e-6;
       const k1 = b1 / bt, k2 = b2 / bt;
-      const tx = base * (1 - f) + .12 * f;   // (v701) far in the mist the surface's own letters give way to the mist's
-      putL(i, tx, (b1 + b2) / (tx || 1e-6), r * Math.min(1.25, .25 + cr) * k1 + FOGC[0] * k2, g * Math.min(1.25, .25 + cg) * k1 + FOGC[1] * k2, b * Math.min(1.25, .25 + cb) * k1 + FOGC[2] * k2); TXON = false; return;
+      put(i, b1 + b2, r * Math.min(1.25, .25 + cr) * k1 + FOGC[0] * k2, g * Math.min(1.25, .25 + cg) * k1 + FOGC[1] * k2, b * Math.min(1.25, .25 + cb) * k1 + FOGC[2] * k2); return;
     }
-    { const dx = wx - P.x, dy = wy - P.y, d2 = dx * dx + dy * dy;   // what this cell spans of its surface: it may ease only while its point moves less than that
-      TXRV = SHN === 1 ? Math.sqrt(d2) * SPKW : d2 * (SHN === 2 ? SPKF : SPKC) + .004; }
-    PFF(i); TXON = true; TXWX = wx; TXWY = wy; TXWK = SHN === 1 ? 1 + (SNX > 0 ? 1 : SNX < 0 ? 2 : SNY > 0 ? 3 : 4) : SHN + 8; TXWZ = SHN === 1 ? WH : 0; putL(i, PFB, lum, PFR * Math.min(1.25, .25 + cr), PFG * Math.min(1.25, .25 + cg), PFBL * Math.min(1.25, .25 + cb)); TXON = false;
+    put(i, base * lum, r * Math.min(1.25, .25 + cr), g * Math.min(1.25, .25 + cg), b * Math.min(1.25, .25 + cb));
   }
 
   function blit(def, left, top, wC, hR, lv, tint) {
@@ -37793,8 +37770,8 @@ o=]#########=>
       if (DEFER) { if (GC.length !== n) { GA = new Uint32Array(n); GB = new Uint32Array(n); GC = new Uint32Array(n); GD = new Uint32Array(n); DEFG = new Uint8Array(n); } else { GC.fill(0); DEFG.fill(0); } } }
     if (PIXD.length === cols * rows) PIXD.fill(1e9); PFST = (PFST + 1) >>> 0 || 2;   // (v702)
     { const n = cols * rows; if (TXS.length !== n) { TXH = new Float32Array(n); TXX = new Float32Array(n); TXY = new Float32Array(n); TXZ = new Float32Array(n); TXS = new Uint32Array(n); TXQ = new Uint8Array(n); TXK = new Uint8Array(n); } TXST = (TXST + 1) >>> 0 || 2; }   // (v701)
-    if (!G.amb && !G.sky && !G.vile && AMB[0] + AMB[1] + AMB[2] < .03) AMB = G.tavern || G.theme === 'tavern' ? [.03, .021, .012] : [.011, .016, .029];   // (v701)
-    const nlCap = G.cityK ? Math.min(NEAR_LIGHTS, 12) : NEAR_LIGHTS, nearStatics = G.statics.length > nlCap ? nearLights(nlCap) : G.statics;
+    if (false) AMB = G.tavern || G.theme === 'tavern' ? [.03, .021, .012] : [.011, .016, .029];   // (v701)
+    const nlCap = G.cityK ? Math.min(NEAR_LIGHTS, 6) : NEAR_LIGHTS, nearStatics = G.statics.length > nlCap ? nearLights(nlCap) : G.statics;
     let lightsUse = nearStatics;
     if (G.statics.length > nlCap) {   // a light that falls out of the nearest few fades away over half a second instead of going out at once, and one coming in fades up
       const inSet = new Set(nearStatics), dtL = Math.min(.1, Math.max(.001, t - (render.lt || t))); render.lt = t; lightsUse = [];
@@ -37812,7 +37789,7 @@ o=]#########=>
     if (G.novas) for (const n of G.novas) { const a = (G.clock || 0) - n.t; if (a < 0 || a > n.dur + .3 || n.echo) continue; const c = ELCOL[n.el], k = Math.min(1, a / n.dur), rr = n.el === 'dark' ? n.R * (1 - k) : n.R * k;
       for (let q = 0; q < 6; q++) { const an = q / 6 * TAU; LIGHTS.push({ x: n.x + Math.cos(an) * rr, y: n.y + Math.sin(an) * rr, r: c[0], g: c[1], b: c[2], i: .9 * (1 - Math.max(0, a - n.dur) / .3), k: 1.6 }); } }
     if (INV3 && INV3.inR) inv3Lights(LIGHTS);   // (v724) the cards are lamps
-    if (LIGHTS.length > 28) LIGHTS.length = 28;
+    if (LIGHTS.length > 18) LIGHTS.length = 18;
     packLights();
 
     rtm('setup'); PT.a = performance.now(); TLX = -1; SKX = -1; if (TALLX.length < rows) TALLX = new Int32Array(rows + 8); TALLX.fill(-9); if (FARX.length < rows) { FARX = new Int32Array(rows + 8); FARK = new Int8Array(rows + 8); } FARX.fill(-9); if (LDFX.length < rows) { LDFX = new Int32Array(rows + 8); SKLX = new Int32Array(rows + 8); } LDFX.fill(-9); SKLX.fill(-9); FARCPU = cols / (2 * VK); { const lv = currentLevel(); FARMAXD = lv === 'lowest' ? 170 : lv === 'low' ? 210 : lv === 'medium' ? 270 : 340; } if (WALLX.length < rows) WALLX = new Int32Array(rows + 8); WALLX.fill(-9); WCELL = WCELLP = -1;
@@ -38084,7 +38061,7 @@ o=]#########=>
       // open land: where nothing near (a trunk, a crown, a low wall, a tall roof) stands in this column, the sky over everything
       // and the far land past the edge are drawn straight off, without the checks every other pixel goes through
       WCELLP = WCELL; WCELL = hit && hit !== 65 && hit !== 20 && hit !== 18 && hit !== 19 ? ((my * W + mx) * 2 + side) : -1;
-      const WCOPY = OPT.stride && perp > LOD1 && WCELL >= 0 && WCELL === WCELLP && (perp > LOD2 ? x % 3 !== 0 : (x & 1));   // (v710) any far wall
+      const WCOPY = FARD && OPT.stride && (x & 1) && perp > 14 && WCELL >= 0 && WCELL === WCELLP && FARCPU / perp < 16;   // (v733) v700's   // (v710) any far wall
       const FASTC = HG && FARD && !G.cz && !PURG && !CN && !KN && !LWN && !TBN && OPT.fast;
       const skyTo = FASTC ? Math.min(hit && hit !== 65 && hit !== 40 ? (hit === 18 || hit === 19 || hit === 20 ? Math.min(top, topK) - 4.6 * unit : top) : 1e9, HY_B) : -1;
                   for (let y = 0; y < rows; y++) {
@@ -38848,18 +38825,18 @@ o=]#########=>
           if (aura && !frozen && !stunned) {
             const band = .5 + .5 * Math.sin(t * 3.2 - v * 12 + ph), fl = .5 + .5 * Math.sin(t * 7.3 + u * 11 + v * 5 + ph);
             const l2 = lv * (.72 + .42 * band + .08 * fl), k2 = .18 * band;
-            putL(i, SD, l2, SR * (1 - k2) + aura[0] * k2, SG * (1 - k2) + aura[1] * k2, SB * (1 - k2) + aura[2] * k2, .85);
+            put(i, SD * l2, SR * (1 - k2) + aura[0] * k2, SG * (1 - k2) + aura[1] * k2, SB * (1 - k2) + aura[2] * k2);
             if (band > .6) glowAdd(i, (band - .6) * .18, aura[0], aura[1], aura[2]);
             continue;
           }
           const l = lv * (def.glow ? 1 : 1.12 - v * .32);
           const cm = Math.min(1, .3 + l);
-          if (frozen) putL(i, SD, Math.max(l, .35), (SR * .4 + 90) * cm, (SG * .5 + 120) * cm, (SB * .3 + 190) * cm, .85);
-          else if (stunned) putL(i, SD, l, (SR * .6 + 100) * cm, (SG * .6 + 90) * cm, SB * .5 * cm, .85);
+          if (frozen) put(i, SD * Math.max(l, .35), (SR * .4 + 90) * cm, (SG * .5 + 120) * cm, (SB * .3 + 190) * cm);
+          else if (stunned) put(i, SD * l, (SR * .6 + 100) * cm, (SG * .6 + 90) * cm, SB * .5 * cm);
           else if (SFOG > .01) { const b1 = SD * l * (1 - SFOG), b2 = FOGB * SFOG, bt = b1 + b2 || 1e-6, k1 = b1 / bt, k2 = b2 / bt, ob = bgc[i], q = DEFG[i] && GC[i] ? 0 : SFOG * .92;
-            putL(i, SD, (b1 + b2) / (SD || 1e-6), SR * cm * (def.glow ? 1 : LT0) * k1 + FOGC[0] * k2, SG * cm * (def.glow ? 1 : LT1) * k1 + FOGC[1] * k2, SB * cm * (def.glow ? 1 : LT2) * k1 + FOGC[2] * k2, .85);
+            put(i, b1 + b2, SR * cm * (def.glow ? 1 : LT0) * k1 + FOGC[0] * k2, SG * cm * (def.glow ? 1 : LT1) * k1 + FOGC[1] * k2, SB * cm * (def.glow ? 1 : LT2) * k1 + FOGC[2] * k2);
             const nb = bgc[i]; bgc[i] = pack(((nb >> 16) & 255) * (1 - q) + ((ob >> 16) & 255) * q, ((nb >> 8) & 255) * (1 - q) + ((ob >> 8) & 255) * q, (nb & 255) * (1 - q) + (ob & 255) * q); }
-          else putL(i, SD, l, SR * cm * (def.glow ? 1 : LT0), SG * cm * (def.glow ? 1 : LT1), SB * cm * (def.glow ? 1 : LT2), .85);
+          else put(i, SD * l, SR * cm * (def.glow ? 1 : LT0), SG * cm * (def.glow ? 1 : LT1), SB * cm * (def.glow ? 1 : LT2));
         }
       }
       if (e.kind === 'mon' && e.atkC && e.atkT > 0 && e.atkC.k !== 'cast' && ty < 9) {
@@ -39062,7 +39039,7 @@ o=]#########=>
     if (grading) { gsnapF.set(fgc); gsnapB.set(bgc); }
     const empOn = P.buffs.empower > 0 && state !== 'dead';
     if (empOn) { if (!empSnapF || empSnapF.length !== n0) { empSnapF = new Uint32Array(n0); empSnapG = new Uint8Array(n0); } empSnapF.set(fgc); empSnapG.set(gly); }
-    if (PIXEL && DEFER) smoothRec(); aoPass(); calmPass(); holdPass(); inkPass(null);   // (v720) smoothRec
+    calmPass(); holdPass(); inkPass(null);   // (v733) v700's passes   // (v720) smoothRec
     // (the CRT glass keeps what you hold near: everything drawn from here to the hands' end is marked as in your hands)
     const crtHands = crtAmt > .001 && glOK; if (crtHands) { if (NEARM.length !== n0) { NEARM = new Uint8Array(n0); NSF = new Uint32Array(n0); NSB = new Uint32Array(n0); NSG = new Uint8Array(n0); } NSF.set(fgc); NSB.set(bgc); NSG.set(gly); }   // (letters held still between frames; then, at High and Ultra, the world's outlines in strokes, before the hands go over it)
     if (state !== 'cut' && state !== 'depart' && !G.menuScene && !G.intro && !CAMP && !LD.shot && !(INV3 && INV3.inR) && !(DLG && DLG.k > .45)) drawHandsEq(t, bx, by - (pitchView + pitchAuto) * rows * .12, flick);
