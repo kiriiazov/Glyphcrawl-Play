@@ -2091,13 +2091,13 @@
   // (v730) light graphics mode: fewer pixels and no glow passes, for GPUs that drop the game
   const LIGHTGL = (() => { try { return localStorage.getItem('glyph.lightGL') === '1'; } catch (e) { return false; } })();
   try { const x = GL && GL.getExtension('WEBGL_debug_renderer_info'); window.__gpu = GL ? (x ? GL.getParameter(x.UNMASKED_RENDERER_WEBGL) : GL.getParameter(GL.RENDERER)) : 'none (no WebGL)'; } catch (_) {}   // (v731) for the report
-  if (GL) { try { glInit(); glOK = true; } catch (e) { console.warn('WebGL setup failed, using the slower renderer', e); } }
+  if (GL) { try { glInit(); glOK = true; if (LIGHTGL) RES = null; } catch (e) { console.warn('WebGL setup failed, using the slower renderer', e); } }   // (v732) light mode: the CPU lights the frame
   // the graphics driver can drop the WebGL context (a GPU reset, the tab put to sleep, a driver hiccup): the browser then shows
   // a blank canvas. Ask for it back, and when it returns rebuild the shader, textures and glyph atlas and carry on.
   cv.addEventListener('webglcontextlost', e => { e.preventDefault(); glLost = true; console.warn('WebGL context lost; waiting for it to come back');
     try { noteErr(new Error('WebGL context lost' + (LIGHTGL ? ' (light mode)' : '')), 'webgl ' + state); } catch (_) {}
-    setTimeout(() => { if (!glLost) return; glLostRecover(); }, 2000); });
-  cv.addEventListener('webglcontextrestored', () => { try { glInit(); glLost = false; glOK = true; resize(); } catch (e) { console.warn('WebGL restore failed', e); } });
+    setTimeout(() => { if (!LIGHTGL || glLost) glLostRecover(); }, LIGHTGL ? 2000 : 300); });   // (v732) outside light mode: always, at once
+  cv.addEventListener('webglcontextrestored', () => { try { glInit(); if (LIGHTGL) RES = null; glLost = false; glOK = true; resize(); } catch (e) { console.warn('WebGL restore failed', e); } });
   function glLostRecover() {   // (v730) the GPU did not give the frame back: go to light mode, by reloading
     try { localStorage.setItem('glyph.lightGL', '1'); } catch (_) {}
     if (!LIGHTGL && (state === 'menu' || state === 'create')) { location.reload(); return; }   // (v731) once only: in light mode, the card
@@ -29231,7 +29231,7 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
-  const GAME_VERSION = 'v731';   // (v728) shown in the main menu's corner
+  const GAME_VERSION = 'v732';   // (v728) shown in the main menu's corner
   // (v729) the last few errors, kept in this browser and shown under the version, so a player can read them out
   const ERRN = { list: (() => { try { return JSON.parse(localStorage.getItem('glyph.errs') || '[]'); } catch (e) { return []; } })() };
   function noteErr(err, where) { try { const m = (err && (err.message || err.reason && err.reason.message || err.reason) || String(err)).toString().slice(0, 160), st = err && err.stack ? String(err.stack).split('\n').find(l => /:\d+:\d+/.test(l)) || '' : '', at = (st.match(/:(\d+):(\d+)\)?\s*$/) || []).slice(1).join(':');
