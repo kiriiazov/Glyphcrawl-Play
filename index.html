@@ -2158,7 +2158,7 @@
     return BD_THEMES[P.cls] ? P.cls : 'none';
   }
   function drawBackdrop(force) {
-    const key = bdWant(), dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.max(1, innerWidth), H = Math.max(1, innerHeight);
+    const key = bdWant(), dpr = 1, W = Math.max(1, innerWidth), H = Math.max(1, innerHeight);
     const sig = key + '|' + W + 'x' + H + '|' + dpr + '|' + PORTRAIT + '|' + getComputedStyle(document.documentElement).getPropertyValue('--fw') + getComputedStyle(document.documentElement).getPropertyValue('--fh');
     if (!force && sig === BD.sig) return; BD.sig = sig; BD.key = key;
     const c = BD.el || (BD.el = document.getElementById('bd')); if (!c) return;
@@ -2170,7 +2170,7 @@
     const fr = PORTRAIT ? { left: W * .08, right: W * .92, top: H * .36, bottom: H * .64, width: W * .84, height: H * .28 } : vp.getBoundingClientRect(), fx0 = fr.left, fy0 = fr.top, fx1 = fr.right, fy1 = fr.bottom, fcx = (fx0 + fx1) / 2, fcy = (fy0 + fy1) / 2;
     const gr = g.createRadialGradient(fcx, fcy, Math.min(fr.width, fr.height) * .3, fcx, fcy, Math.hypot(W, H) * .62);
     gr.addColorStop(0, th.base[0]); gr.addColorStop(1, th.base[1]); g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    if (fx0 < 3 && fy0 < 3 && W - fx1 < 3 && H - fy1 < 3) return;   // the frame fills the window: nothing shows
+    if (fx0 < 3 && fy0 < 3 && W - fx1 < 3 && H - fy1 < 3) { c.width = c.height = 1; BD.sig = sig; return; }   // (v727) nothing shows: hold no pixels   // the frame fills the window: nothing shows
     // the field of letters, in cells the size of a small letter; cells under the frame are skipped
     const fz = W > 1400 || H > 1100 ? 14 : 12, cw = Math.round(fz * .62), ch = Math.round(fz * 1.25), cols = Math.ceil(W / cw), rws = Math.ceil(H / ch);
     g.font = `500 ${fz}px "Fira Mono", ui-monospace, Menlo, Consolas, monospace`; g.textBaseline = 'middle'; g.textAlign = 'center';
@@ -2406,8 +2406,17 @@ o=]#########=>
     high:   { rows: 39, '4:3': 104, '16:9': 138, '21:9': 182 },   // (v708) a twelfth of Ultra's letters, for phones at 60 fps   // (v701: the sharp fine still is the target; was 63 rows)   // (v697: was 72 rows; Ultra was 90; the camp 108 and 72)
     ultra:  { rows: 54, '4:3': 144, '16:9': 192, '21:9': 252 },   // (v719) 192 x 54: letters a little smaller than High's (138 x 39)   // (v709) 288 x 81: 2.8 times fewer letters than v701-v708's 480 x 135   // (v701: no more letters than High; Ultra's extras are light, not letters)
     camp:   { rows: 81, '4:3': 216, '16:9': 288, '21:9': 378 },   // (v705) the creation camp keeps its own lighter grid (desktop)
-    campPh: { rows: 60, '4:3': 160, '16:9': 213, '21:9': 280 }     // and on a phone
+    campPh: { rows: 60, '4:3': 160, '16:9': 213, '21:9': 280 },    // and on a phone
+    menu:   { rows: 108, '4:3': 288, '16:9': 384, '21:9': 504 },   // (v727) the title scene: one slow view, so it can afford fine letters
+    menuPh: { rows: 72, '4:3': 192, '16:9': 256, '21:9': 336 }     // and on a phone
   };
+  // (v727) the grid the frame wants now: the title and the camp keep their own finer ones, the game follows the detail level
+  function wantGrid() {
+    const ph = typeof phoneFrame === 'function' && phoneFrame();
+    if (CAMP_FINE) return ph ? GRID[currentLevel()] || GRID.high : GRID.camp;
+    if (state === 'menu' || (state === 'create' && !CAMP)) return ph ? GRID.menuPh : GRID.menu;
+    return GRID[currentLevel()] || GRID.ultra;
+  }
   const DETAIL_ROWS = { lowest: 36, low: 45, medium: 54, high: 39, ultra: 54 };
   const CRT_LINES = { lowest: 2, low: 2, medium: 3, high: 3, ultra: 3 };   // scanlines per row of letters
   const CRT_MASKP = { lowest: 6, low: 5, medium: 4, high: 3, ultra: 3 };   // aperture grille: device pixels per red-green-blue stripe set
@@ -2424,6 +2433,8 @@ o=]#########=>
   let cols = 192, rows = 54, cellW = 7, cellH = 14, ACW = 7, ACH = 14, scale = 1, vpW = 1280, vpH = 720, FRAME_PROF = 'desk', FRAME_FS = 1, PORTRAIT = false;
   let FRAME_TOUCH = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
   const COARSE = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  // (v727) WebKit: Safari on the Mac, and every browser on iPhone and iPad. It is much stricter about memory than Chrome
+  const WEBKIT = (() => { try { const u = navigator.userAgent || ''; return /AppleWebKit/.test(u) && !/Chrome\/|Chromium|Edg\/|Android/.test(u); } catch (e) { return false; } })();
   // phones draw the wood a little lighter: at most three trunks layered along a ray (five on a desktop) and the eight nearest
   // standing lights rather than ten; the murk hides the difference
   const TREE_MAX = COARSE ? 3 : 5, NEAR_LIGHTS = 18;   // (v702: one setting everywhere; was 9 on a phone, 13 on a desktop)
@@ -2590,8 +2601,8 @@ o=]#########=>
     try { drawBackdrop(); } catch (e) { console.warn('backdrop', e); }
     if (typeof fitOverlays === 'function') fitOverlays();
     // device pixels per frame pixel: phones stop at 1.5 (crisp enough for letters, about half the GPU's work of 2)
-    const dpr = Math.min(LOWQ() ? 1.25 : COARSE ? 1.5 : 2, window.devicePixelRatio || 1);
-    const g = GRID[currentLevel()] || GRID.ultra;   // (v708) the camp too
+    const dpr = Math.min(LOWQ() ? 1.25 : COARSE || WEBKIT ? 1.5 : 2, window.devicePixelRatio || 1);   // (v727) Safari: 1.5 at most
+    const g = wantGrid();   // (v727) the title and the camp have their own; (v708) was the level's everywhere
     rows = g.rows; cols = g[aspect] || g['16:9'];
     // the drawing is made at the frame's size on the screen, in device pixels, so the letters stay sharp at any scale: the
     // grid never changes, only how many pixels a cell spans (a fraction is fine: each letter is taken nearest from its atlas)
@@ -29535,7 +29546,7 @@ o=]#########=>
     const D = { ...CAMP_FIG[F.cls], ...(CAMP_FIG_SUB[F.sub] || {}) }, { S, base } = campStrike(F), plan = {}, pre = `cp_${F.cls}_${F.gen}_`, sit0 = D.sit || [0, 0];
     const st = campRaw(base), so = { yaw: D.syaw, sit: [0, 0] }, bare = !!D.bare;
     const rest = campRaw(D.rest), ro = { turn: D.turn || 0, nod: D.nod || 0, yaw: D.yaw, sit: sit0 };
-    const NR = D.lie ? 4 : COARSE ? 8 : 16;   // (v616) more steps to its idling, and two slow breaths through each round of it
+    const NR = D.lie ? 4 : COARSE || WEBKIT ? 8 : 16;   // (v616) more steps to its idling, and two slow breaths through each round of it
     campFrames([[0, rest, ro], ...D.k.map(([t, q, o]) => [t, campRaw({ ...D.rest, ...q }), { ...ro, ...o }]), [1, rest, ro]], NR, true).forEach((fr, n) => { const b = Math.sin(n / NR * TAU * 2); fr.pose = campBreath(fr.pose, b * .022); fr.nod = (fr.nod || 0) + b * .04; plan[pre + 'r' + n] = { ...fr, lie: D.lie, bare, pri: n ? 1.2 : .1 }; });
     // getting up: from how it rests to its stance
     const from = D.up ? [campRaw(D.up.pose), { yaw: D.up.yaw, nod: D.up.nod, sit: D.up.sit }] : [rest, ro];
@@ -29546,19 +29557,19 @@ o=]#########=>
       campFrames([[0, reach, { ...rt, sit: sit0 }], [1, st, so]], 5, false).slice(0, 4).forEach((fr, n) => { plan[pre + 'u' + (n + 2)] = { ...fr, pri: .2 }; });
       F.NU = 6; F.upT = 1.6;
     } else { campFrames([[0, from[0], from[1]], [1, st, so]], D.up ? 6 : 7, false).slice(D.up ? 0 : 1, D.up ? 5 : 6).forEach((fr, n) => { plan[pre + 'u' + n] = { ...fr, pri: .5 }; }); F.NU = 5; F.upT = .6; }   // (v637) getting up is made for everyone before their idling
-    const NA = COARSE ? 12 : 16;   // (v624) more frames to every move, and to the idles below: smoother
+    const NA = COARSE || WEBKIT ? 12 : 16;   // (v624) more frames to every move, and to the idles below: smoother
     campFrames([[0, st, so], ...S.k.map(([t, q, tu]) => [t, campRaw({ ...base, ...q }), typeof tu === 'object' ? { ...so, turn: tu.turn || 0, yaw: so.yaw + (tu.dy || 0) } : { ...so, turn: tu || 0 }]), [1, st, so]], NA, false).forEach((fr, n) => { plan[pre + 'a' + n] = { ...fr, pri: n <= Math.ceil(NA * .3) ? .6 + n * .001 : 1.8 }; });   // (v639) the start of its move is made behind the fog, with its getting up
     { const yw = (o, t) => ({ ...o, yaw: (o.yaw || 0) + t * TAU });   // (v707) the flourish when it is chosen: its move, whirled once round
       campFrames([[0, st, so], ...S.k.map(([t, q, tu]) => [t, campRaw({ ...base, ...q }), yw(typeof tu === 'object' ? { ...so, turn: tu.turn || 0, yaw: so.yaw + (tu.dy || 0) } : { ...so, turn: tu || 0 }, t)]), [1, st, yw(so, 1)]], NA, false).forEach((fr, n) => { plan[pre + 'f' + n] = { ...fr, pri: 1.6 + n * .001 }; }); }
     // (v616) once it has shown its move it does not stand frozen: it breathes, shifts its weight, looks one way and the other
-    const NI = COARSE ? 6 : 10, sw = (dy, o) => [campBreath(st, dy), { ...so, ...o, yaw: so.yaw + (o.yaw || 0) }];
+    const NI = COARSE || WEBKIT ? 6 : 10, sw = (dy, o) => [campBreath(st, dy), { ...so, ...o, yaw: so.yaw + (o.yaw || 0) }];
     campFrames([[0, st, so], [.25, ...sw(.03, { turn: .22, nod: -.04, yaw: .07 })], [.5, ...sw(.004, { turn: .04 })], [.75, ...sw(.028, { turn: -.24, nod: .05, yaw: -.07 })], [1, st, so]], NI, true).forEach((fr, n) => { plan[pre + 'i' + n] = { ...fr, pri: 2.2 }; });
     F.NI = NI; F.IF = [...Array(NI).keys()].map(n => plan[pre + 'i' + n]);   // (v638) its idling, kept to be made again from every side
     F.pre = pre; F.NR = NR; F.NA = NA; F.dur = S.d; F.nova = S.nova; return plan;
   }
   // (v684) the kept frames of the figures at the fire
   const CAMPC = { db: null, opening: null, got: new Map(), pend: new Set(), VER: 'c684' };
-  function campDb() { if (CAMPC.opening) return CAMPC.opening; CAMPC.opening = new Promise(res => { try { const r = indexedDB.open('glyphcrawl-bake', 1); r.onupgradeneeded = () => { try { r.result.createObjectStore('camp'); } catch (e) { } }; r.onsuccess = () => { CAMPC.db = r.result; res(CAMPC.db); }; r.onerror = () => res(null); r.onblocked = () => res(null); } catch (e) { res(null); } }); return CAMPC.opening; }
+  function campDb() { if (WEBKIT) return CAMPC.opening || (CAMPC.opening = Promise.resolve(null)); /* (v727) Safari: no IndexedDB */ if (CAMPC.opening) return CAMPC.opening; CAMPC.opening = new Promise(res => { try { const r = indexedDB.open('glyphcrawl-bake', 1); r.onupgradeneeded = () => { try { r.result.createObjectStore('camp'); } catch (e) { } }; r.onsuccess = () => { CAMPC.db = r.result; res(CAMPC.db); }; r.onerror = () => res(null); r.onblocked = () => res(null); } catch (e) { res(null); } }); return CAMPC.opening; }
   const campKey = (F, key) => { const g = F.p.gear || {}, gs = Object.keys(g).sort().map(k => k + ':' + (g[k] && (g[k].name || g[k].family || g[k].kind) || '')).join(','); return [CAMPC.VER, F.cls, F.sub, F.race, F.sex, key.slice(F.pre.length), gs].join('|'); };
   function campPack(d) { const q = a => { const o = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = a[i] < 0 ? 0 : a[i] > 255 ? 255 : a[i] + .5; return o; }, A = new Uint8Array(d.A.length); for (let i = 0; i < A.length; i++) A[i] = Math.round(Math.max(0, Math.min(1, d.A[i])) * 255);
     const o = { ...d, A, Cr: q(d.Cr), Cg: q(d.Cg), Cb: q(d.Cb), packed: 1 }; delete o.mips; return o; }
@@ -29979,7 +29990,7 @@ o=]#########=>
   }
   // ---- the camp's page: fog, names over heads, the scroll, the choosing of a people ----
   function campFogEl() { let f = document.getElementById('campFog'); if (!f) { f = document.createElement('div'); f.id = 'campFog'; f.className = 'campfog2'; const tx = campFogTex(), bank = s => `<b class="fs ${s}"><s class="c1" style="background-image:url(${tx[s + '1']})"></s><s class="c2" style="background-image:url(${tx[s + '2']})"></s>${'<i></i>'.repeat(4)}</b>`; f.innerHTML = bank('l') + bank('r') + `<u class="fill"><s style="background-image:url(${tx.fill})"></s></u>`; vp.appendChild(f); } return f; }
-  function campEnd() { if (!CAMP) return; CAMP = null; bdSync(); if (CAMP_FINE) { CAMP_FINE = false; resize(); } for (const k of Object.keys(SPR)) if (k.startsWith('cp_')) delete SPR[k]; VK = K; }
+  function campEnd() { if (!CAMP) return; if (!CAMP.back || WEBKIT) { CAMPC.got.clear(); CAMPC.pend.clear(); } /* (v727) let the camp's frames go */ CAMP = null; bdSync(); if (CAMP_FINE) { CAMP_FINE = false; resize(); } for (const k of Object.keys(SPR)) if (k.startsWith('cp_')) delete SPR[k]; VK = K; }
   let campBusy = false, campFogAt = 0;
   // (v528) the fog's cloud, painted once: fractal value noise; a bank is dense toward its own side and frays into wisps toward
   // the middle; the cover is the same cloud with no edge. Light catches the tops of the billows
@@ -39253,6 +39264,7 @@ o=]#########=>
       // behind a game window the world is nearly covered: draw it rarely (never behind the character menu) so the window stays smooth
       if (INV3 && state !== 'player') { INV3.fin = null; inv3Done(); }   // (v724) left some other way
       const covered = state === 'player' ? (INV3 ? (INV3.anim || INV3.acting ? 1 : 4) : 0) : state === 'company' || state === 'loot' || state === 'ench' || state === 'paused' || state === 'dead' ? 6 : 1;
+      { const g = wantGrid(); if (g.rows !== rows || (g[aspect] || g['16:9']) !== cols) resize(); }   // (v727)
       if (covered === 1 || (covered && frameNo % covered === 0) || !render.once || render.lastState !== state) { render(now / 1000); render.once = true; render.lastState = state; }
     } catch (err) { console.error(err); }
     { const wk = performance.now() - w0; frame.work = (frame.work || wk) * .95 + wk * .05; frame.last = wk; }
