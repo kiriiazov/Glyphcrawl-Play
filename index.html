@@ -2467,10 +2467,12 @@ o=]#########=>
   let DBGW = null;   // test hook: watches writes into the frame
   function put(i, v, r, g, b) {
     if (DBGW) DBGW(i, r, g, b, v); if (DEFG[i]) DEFG[i] = 0;
-    if (v <= 0.02) { gly[i] = 0; bgc[i] = pack(r * v * .6, g * v * .6, b * v * .6); return; }
+    if (v <= 0.02) { gly[i] = 0; bgc[i] = pack(r * v * .6, g * v * .6, b * v * .6); SURFM[i] = SURF; return; }
     const vv = v * 1.12 > 1 ? 1 : v * 1.12;
     gly[i] = PLUT[(vv * 255) | 0];
     const f = .82 + .45 * vv, k = vv * (.5 + .1 * vv);
+    SURFM[i] = SURF;
+    if (SURF) { const m = k + (f - k) * (COVN[gly[i]] || .08) * .9; gly[i] = 0; fgc[i] = bgc[i] = pack(r * m, g * m, b * m); return; }   // (v734) a bare surface
     if (PIXEL) {   // (v719)
       const c = COVN[gly[i]] || .08, m = k + (f - k) * c * .85, d = PXD >= 0 ? PXD : (PIXD.length > i && PIXD[i] > 0 ? PIXD[i] : 99);
       const t = d <= FIG_N0 ? 0 : d >= FIG_N1 ? 1 : (d - FIG_N0) / (FIG_N1 - FIG_N0), nr = 1 - t * t * (3 - 2 * t), gm = nr * (vv > .8 ? (vv - .8) / .2 : 0);
@@ -2545,8 +2547,10 @@ o=]#########=>
     GC[i] = (((MIXB ? (LASTQ * 254 + 1) | 0 : 0) << 24) | (cl8(f * 255) << 16) | (cl8(lv * 127.5) << 8) | (kind | ((PLUT === LUTF ? 1 : PLUT === LUTR ? 2 : 0) << 3))) >>> 0;   // (v709) + the texture step (alpha)
     GD[i] = 0x808000;   // (v705) calm 0, letter x1, ground x1, no darkening
   }
+  // (v734) SURF: shade() is drawing a wall, floor or ceiling; SURFM: which cells are bare surface this frame
+  const SURF_BARE = true; let SURF = 0, SURFM = new Uint8Array(1);
   function putCh(i, ch, r, g, b, bg) {
-    if (DBGW) DBGW(i, r, g, b, 2);
+    if (DBGW) DBGW(i, r, g, b, 2); SURFM[i] = 0;
     if (DEFG[i]) DEFG[i] = 0;
     gly[i] = Math.max(0, Math.min(94, ch.charCodeAt(0) - 32));
     fgc[i] = pack(r, g, b);
@@ -2554,8 +2558,8 @@ o=]#########=>
   }
   // (v710) the sky in one column of two: the odd column copies the even one beside it (its stars too, so a star is a pair)
   function skyCopy(i, x, y) { return false;   // (v733) off
-    if (!OPT.stride) return false; if ((x & 1) && SKLX[y] === x - 1) { gly[i] = gly[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFG[i]) DEFG[i] = 0; if (SKYM.length > i) SKYM[i] = SKYM[i - 1]; SKLX[y] = -9; return true; } SKLX[y] = x; return false; }
-  function blank(i, bg) { if (DEFG[i]) DEFG[i] = 0; gly[i] = 0; bgc[i] = bg ? pack(bg[0], bg[1], bg[2]) : 0; }
+    if (!OPT.stride) return false; if ((x & 1) && SKLX[y] === x - 1) { gly[i] = gly[i - 1]; SURFM[i] = SURFM[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFG[i]) DEFG[i] = 0; if (SKYM.length > i) SKYM[i] = SKYM[i - 1]; SKLX[y] = -9; return true; } SKLX[y] = x; return false; }
+  function blank(i, bg) { if (DEFG[i]) DEFG[i] = 0; gly[i] = 0; SURFM[i] = 0; bgc[i] = bg ? pack(bg[0], bg[1], bg[2]) : 0; }
   function h2(x, y) {
     let n = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263)) | 0;
     n = Math.imul(n ^ (n >>> 13), 1274126177);
@@ -2732,6 +2736,13 @@ o=]#########=>
       fgc[i] = pack(((f >> 16) & 255) * k, ((f >> 8) & 255) * k, (f & 255) * k); bgc[i] = pack(((b >> 16) & 255) * k, ((b >> 8) & 255) * k, (b & 255) * k); }
   }
   let INK_NX = new Uint8Array(1);
+  let SURF_T = new Uint32Array(1);
+  function surfSmooth() {   // (v734)
+    const n = cols * rows; if (SURF_T.length !== n) SURF_T = new Uint32Array(n); SURF_T.set(bgc); const B = SURF_T, M = SURFM;
+    for (let y = 1; y < rows - 1; y++) for (let x = 1, i = y * cols + 1; x < cols - 1; x++, i++) { if (!M[i] || gly[i]) continue;
+      const c = B[i]; let r = ((c >> 16) & 255) * 4, g = ((c >> 8) & 255) * 4, b = (c & 255) * 4;
+      for (const j of [i - 1, i + 1, i - cols, i + cols]) { const d = M[j] && !gly[j] ? B[j] : c; r += (d >> 16) & 255; g += (d >> 8) & 255; b += d & 255; }
+      const v = pack(r / 8, g / 8, b / 8); bgc[i] = fgc[i] = v; } }
   function inkPass(skip) {
     const lv = inkLevel(), n = cols * rows; if (INK_PREV.length !== n) INK_PREV = new Uint8Array(n);
     if (DEFER) { INK_PREV.fill(0); return; }   // (v703)
@@ -2779,6 +2790,7 @@ o=]#########=>
       const pc = PV[at]; let k = INK_LIST.indexOf(ch) + 1;
       if (pc && pc !== k) { const old = INK_LIST[pc - 1], near = { '-': '_~/\\', '_': '-~', '~': '-_', '|': '/\\()', '/': '|-()', '\\': '|-()', '(': '|/\\', ')': '|/\\' }; if (near[old] && near[old].includes(ch)) { ch = old; k = pc; } }
       const f = fgc[lit] | 0, fb = fgc[at] | 0, fig = SPRD[lit] < 1e8 || SPRD[at] < 1e8;
+      if (!fig && SURFM[lit] && SURFM[at]) continue;   // (v734) bare surfaces carry no strokes
       if (fig) {   // a figure: its outline is a soft line halfway between its own colour and the dark behind it
         const b0 = bgc[at] | 0, mx = (a, c) => (((a >> 16) & 255) * .55 + ((c >> 16) & 255) * .45);
         if (DEFER && DEFG[at] && GC[at]) { gly[at] = DEFG[at] = INK_CH[ch]; fgc[at] = pack(((f >> 16) & 255) * .28, ((f >> 8) & 255) * .28, (f & 255) * .28); NX[at] = k; continue; }   // (v708) a lit record keeps its light
@@ -29226,7 +29238,7 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
-  const GAME_VERSION = 'v733';   // (v728) shown in the main menu's corner
+  const GAME_VERSION = 'v734';   // (v728) shown in the main menu's corner
   // (v729) the last few errors, kept in this browser and shown under the version, so a player can read them out
   const ERRN = { list: (() => { try { return JSON.parse(localStorage.getItem('glyph.errs') || '[]'); } catch (e) { return []; } })() };
   function noteErr(err, where) { try { const m = (err && (err.message || err.reason && err.reason.message || err.reason) || String(err)).toString().slice(0, 160), st = err && err.stack ? String(err.stack).split('\n').find(l => /:\d+:\d+/.test(l)) || '' : '', at = (st.match(/:(\d+):(\d+)\)?\s*$/) || []).slice(1).join(':');
@@ -35917,9 +35929,9 @@ o=]#########=>
       // swamp mist: the farther a thing is, the more it melts into a pale green haze
       const dx = wx - P.x, dy = wy - P.y, f = (HAZE ? FOGTS[Math.min(4095, ((dx * dx + dy * dy) * .5) | 0)] : FOGT[Math.min(1023, ((dx * dx + dy * dy) * 2) | 0)]) * FOGD, b1 = base * lum * (1 - f), b2 = FOGB * f, bt = b1 + b2 || 1e-6;
       const k1 = b1 / bt, k2 = b2 / bt;
-      put(i, b1 + b2, r * Math.min(1.25, .25 + cr) * k1 + FOGC[0] * k2, g * Math.min(1.25, .25 + cg) * k1 + FOGC[1] * k2, b * Math.min(1.25, .25 + cb) * k1 + FOGC[2] * k2); return;
+      SURF = SURF_BARE ? 1 : 0; put(i, b1 + b2, r * Math.min(1.25, .25 + cr) * k1 + FOGC[0] * k2, g * Math.min(1.25, .25 + cg) * k1 + FOGC[1] * k2, b * Math.min(1.25, .25 + cb) * k1 + FOGC[2] * k2); SURF = 0; return;
     }
-    put(i, base * lum, r * Math.min(1.25, .25 + cr), g * Math.min(1.25, .25 + cg), b * Math.min(1.25, .25 + cb));
+    SURF = SURF_BARE ? 1 : 0; if (SURF) base = SHN === 2 ? .5 + .5 * base : .3 + .7 * base; /* the ground calmer than walls */ put(i, base * lum, r * Math.min(1.25, .25 + cr), g * Math.min(1.25, .25 + cg), b * Math.min(1.25, .25 + cb)); SURF = 0;
   }
 
   function blit(def, left, top, wC, hR, lv, tint) {
@@ -37768,6 +37780,7 @@ o=]#########=>
     { const pp = VIEW.projPx || 900, e = EYE_H || .5; SPKW = cellH / pp * 1.2; SPKF = cellH / (e * pp) * 1.2; SPKC = cellH / (((CH_NOW || 2) - e) || 1) / pp * 1.2; }   // (v702)
     { const n = cols * rows; DEFER = !!(glOK && RES && !NOCOMPOSE && !PORT_IN && !glLost);   // (v703)
       if (DEFER) { if (GC.length !== n) { GA = new Uint32Array(n); GB = new Uint32Array(n); GC = new Uint32Array(n); GD = new Uint32Array(n); DEFG = new Uint8Array(n); } else { GC.fill(0); DEFG.fill(0); } } }
+    if (SURFM.length !== cols * rows) SURFM = new Uint8Array(cols * rows); else SURFM.fill(0);   // (v734)
     if (PIXD.length === cols * rows) PIXD.fill(1e9); PFST = (PFST + 1) >>> 0 || 2;   // (v702)
     { const n = cols * rows; if (TXS.length !== n) { TXH = new Float32Array(n); TXX = new Float32Array(n); TXY = new Float32Array(n); TXZ = new Float32Array(n); TXS = new Uint32Array(n); TXQ = new Uint8Array(n); TXK = new Uint8Array(n); } TXST = (TXST + 1) >>> 0 || 2; }   // (v701)
     if (false) AMB = G.tavern || G.theme === 'tavern' ? [.03, .021, .012] : [.011, .016, .029];   // (v701)
@@ -38069,7 +38082,7 @@ o=]#########=>
         const yp = (y + .5) * cellH, i = y * cols + x; SHN = 0;
         if (FASTC) { const hk = HK[y];
           if (hk === 8 || hk === 9) { if (RTPX) PCAT = 4; const d = HD[y]; PIXD[i] = d;
-            if (hk === 8 && d > 10 && OPT.stride) { const cpu = FARCPU / d, sd = d > 24 && cpu < 9 ? 3 : cpu < 20 ? 2 : 1, f0 = FARX[y]; if (sd > 1 && f0 >= 0 && x - f0 < sd && FARK[y] === hk) { gly[i] = gly[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); continue; } FARX[y] = x; FARK[y] = hk; }
+            if (hk === 8 && d > 10 && OPT.stride) { const cpu = FARCPU / d, sd = d > 24 && cpu < 9 ? 3 : cpu < 20 ? 2 : 1, f0 = FARX[y]; if (sd > 1 && f0 >= 0 && x - f0 < sd && FARK[y] === hk) { gly[i] = gly[i - 1]; SURFM[i] = SURFM[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); continue; } FARX[y] = x; FARK[y] = hk; }
             if (PANO_COL && d >= PANO_T && panoPix(i, yp, hor, projPx, rdx, rdy)) continue; farPix(i, hk, d, yp, rdx, rdy, hor, projPx, t); continue; }
           if (!hk && yp < skyTo) { if (RTPX) PCAT = 2; PIXD[i] = 1e9; if (skyCopy(i, x, y)) continue; if (PANO_COL && panoPix(i, yp, hor, projPx, rdx, rdy)) continue; PT.sky++; skyCell(i, x, yp, hor, rdx, rdy, t); continue; } }
         if (RF) PIXD[i] = HG ? 1e9 : 0;   // drawn by something the roofs never cover, unless set below
@@ -38146,7 +38159,7 @@ o=]#########=>
         const onWall = hit !== 40 && !(FARD && hit === 65) && yp >= top && (HG ? yp < HY_B && yp >= HY_T && !HK[y] : yp <= bot);
         if (onWall) { if (RTPX) PCAT = 1;
           // a house far off in the open: one column in two is worked out where the next shows the same face of the same house
-          if (WCOPY && WALLX[y] === x - 1) { gly[i] = gly[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); PIXD[i] = perp; WALLX[y] = x; continue; }
+          if (WCOPY && WALLX[y] === x - 1) { gly[i] = gly[i - 1]; SURFM[i] = SURFM[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); PIXD[i] = perp; WALLX[y] = x; continue; }
           const vv = (yp - top) / lineH, vw = vv * CHc, layer = Math.floor(vw);
           WH = vw;
           let base;
@@ -38180,7 +38193,7 @@ o=]#########=>
             if (yp > ctop) { const lf = h2(Math.floor(az * 180), Math.floor((top - yp) / Math.max(1, unit) * 9)), edge = (yp - ctop) / Math.max(1, ex * unit);
               if (edge > .12 || lf > .5) { const moon = edge < .3 && lf > .7 ? .05 : 0; put(i, .055 + moon + (lf > .8 ? .05 : lf * .03) * Math.min(1, edge * 3), 36 + moon * 600, 58 + moon * 700, 46 + moon * 700); continue; } }
           }
-          if (!floor && !ceil2 && TBN && (x & 1) && TALLX[y] === x - 1) { gly[i] = gly[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); TALLX[y] = x; if (RF) PIXD[i] = PIXD[i - 1]; continue; }   // high up and far off: every other column copies its neighbour
+          if (!floor && !ceil2 && TBN && (x & 1) && TALLX[y] === x - 1) { gly[i] = gly[i - 1]; SURFM[i] = SURFM[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); TALLX[y] = x; if (RF) PIXD[i] = PIXD[i - 1]; continue; }   // high up and far off: every other column copies its neighbour
           if (!floor && !ceil2 && TBN) { let drawn = false;
             for (let q = 0; q < TBN && !drawn; q++) { if (yp < TBTOP[q]) continue; const hh = EYE - TBB[q] + (hor - yp) * TBP[q] / projPx, rd0 = RAY_D; RAY_D = TBP[q] * Math.hypot(rdx, rdy);
               const b2 = wallTex(TBT[q], TBU[q], CH - hh, TBM[q], TBY[q], TBS[q]); RAY_D = rd0; if (b2 < 0) continue; drawn = true; if (RF) PIXD[i] = TBP[q];
@@ -38193,11 +38206,11 @@ o=]#########=>
             if (hk === 8 || hk === 9) { if (PANO_COL && d >= PANO_T && panoPix(i, yp, hor, projPx, rdx, rdy)) continue; farPix(i, hk, d, yp, rdx, rdy, hor, projPx, t); continue; }
             if (FARD && OPT.stride && hk === 1 && d > 10) {   // far ground: one column in two (one in three further off) is worked out, the rest copy it; by how many columns a cell of ground spans here
               const cpu = FARCPU / d, sd = d > 24 && cpu < 9 ? 3 : cpu < 20 ? 2 : 1, f0 = FARX[y];
-              if (sd > 1 && f0 >= 0 && x - f0 < sd && FARK[y] === hk) { gly[i] = gly[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); continue; } FARX[y] = x; FARK[y] = hk; }
+              if (sd > 1 && f0 >= 0 && x - f0 < sd && FARK[y] === hk) { gly[i] = gly[i - 1]; SURFM[i] = SURFM[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); continue; } FARX[y] = x; FARK[y] = hk; }
             if (PURGH && (hk === 2 || hk === 7)) { purgRock(i, d, yp, rdx, rdy, hor, projPx, light(d), hk === 7); FLOORD[i] = d; continue; }
             if (hk === 2 || hk === 4) { riserPix(i, d, yp, rdx, rdy, hk === 4, hor, projPx, light(d), THM); continue; } }
           else { const p = floor ? yp - hor : hor - yp; if (p <= 0) { blank(i); continue; } d = (floor ? EYE_H : CH - EYE_H) * projPx / p; if (RF) PIXD[i] = d;
-            if (OPT.stride && d > LOD1 && !PURG) { if (LDFX[y] === x - 1 && (d > LOD2 ? x % 3 !== 0 : (x & 1))) { gly[i] = gly[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); LDFX[y] = x; continue; } LDFX[y] = x; } }   // (v710) far floor and ceiling
+            if (OPT.stride && d > LOD1 && !PURG) { if (LDFX[y] === x - 1 && (d > LOD2 ? x % 3 !== 0 : (x & 1))) { gly[i] = gly[i - 1]; SURFM[i] = SURFM[i - 1]; fgc[i] = fgc[i - 1]; bgc[i] = bgc[i - 1]; if (DEFER) cpRec(i); LDFX[y] = x; continue; } LDFX[y] = x; } }   // (v710) far floor and ceiling
           const fx = P.x + d * rdx, fy = P.y + d * rdy; SHN = floor ? 2 : 3;
           const ti = Math.floor(fx), tj = Math.floor(fy);
           if (PURG && floor && purgFloor(i, yp, hor, d, fx, fy, rdx, rdy, t, light(d), projPx, light)) continue;
@@ -38559,7 +38572,7 @@ o=]#########=>
     if (HG && G.sky && !CINE && OPT.rims && RF) rimPass();
     if (G.wells) drawWells(hor, dirX, dirY, plX, plY, projPx, light);
     if (G.mill) drawSails(hor, dirX, dirY, plX, plY, projPx, light);
-    CH_NOW = CH; if (G.roofs && G.cotK) drawRoofs(hor, dirX, dirY, plX, plY, projPx, light, THM.tint);
+    CH_NOW = CH; if (G.roofs && G.cotK) { SURF = SURF_BARE ? 1 : 0; try { drawRoofs(hor, dirX, dirY, plX, plY, projPx, light, THM.tint); } finally { SURF = 0; } }   // (v734) bare
     if (G.boxes) drawBoxes(hor, dirX, dirY, plX, plY, projPx, light);
     rtm('boxes'); const inv = 1 / (plX * dirY - dirX * plY);
     const BARS = []; let aim = null; FOEBARS = []; EYES = [];
@@ -39039,7 +39052,7 @@ o=]#########=>
     if (grading) { gsnapF.set(fgc); gsnapB.set(bgc); }
     const empOn = P.buffs.empower > 0 && state !== 'dead';
     if (empOn) { if (!empSnapF || empSnapF.length !== n0) { empSnapF = new Uint32Array(n0); empSnapG = new Uint8Array(n0); } empSnapF.set(fgc); empSnapG.set(gly); }
-    calmPass(); holdPass(); inkPass(null);   // (v733) v700's passes   // (v720) smoothRec
+    if (SURF_BARE) surfSmooth(); calmPass(); holdPass(); inkPass(null);   // (v733) v700's passes   // (v720) smoothRec
     // (the CRT glass keeps what you hold near: everything drawn from here to the hands' end is marked as in your hands)
     const crtHands = crtAmt > .001 && glOK; if (crtHands) { if (NEARM.length !== n0) { NEARM = new Uint8Array(n0); NSF = new Uint32Array(n0); NSB = new Uint32Array(n0); NSG = new Uint8Array(n0); } NSF.set(fgc); NSB.set(bgc); NSG.set(gly); }   // (letters held still between frames; then, at High and Ultra, the world's outlines in strokes, before the hands go over it)
     if (state !== 'cut' && state !== 'depart' && !G.menuScene && !G.intro && !CAMP && !LD.shot && !(INV3 && INV3.inR) && !(DLG && DLG.k > .45)) drawHandsEq(t, bx, by - (pitchView + pitchAuto) * rows * .12, flick);
