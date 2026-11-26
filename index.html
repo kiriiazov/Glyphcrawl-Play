@@ -218,6 +218,7 @@
   .mbtn:hover:not(:disabled)::after, .mbtn:focus-visible::after { transform: scaleX(1); }
   .mbtn:disabled { color: #6b5d48; cursor: default; text-shadow: none; }
   .mmenu .mver { position: absolute; right: max(10px, 1.6cqw); bottom: max(8px, 1.4cqh); margin: 0; font: 400 12px var(--label); letter-spacing: .14em; color: #8f7f62; opacity: .8; pointer-events: none; text-shadow: 0 1px 3px #000; }
+  .mmenu .merr { position: absolute; right: max(10px, 1.6cqw); bottom: calc(max(8px, 1.4cqh) + 18px); margin: 0; max-width: 46cqw; font: 400 11px/1.3 ui-monospace, Menlo, monospace; color: #c98a6a; opacity: .85; text-align: right; pointer-events: none; text-shadow: 0 1px 3px #000; }
   .mmenu .msave { margin: -10px 0 0 30px; font-size: 12.5px; color: #9c8a6c; font-style: italic; min-height: 1em; }
   .mmenu .mq { margin: 0 0 0 30px; font: 400 20px var(--label); letter-spacing: .06em; color: #e6d2a6; }
   .mmenu .tmode { margin: 18px 0 0 30px; opacity: .75; }
@@ -29214,7 +29215,14 @@ o=]#########=>
   }
   let testMode = false; try { testMode = localStorage.getItem('glyph.test') === '1'; } catch (_) {}
   let skipOpening = false; try { skipOpening = localStorage.getItem('glyph.skipcut') === '1'; } catch (_) {}
-  const GAME_VERSION = 'v728';   // (v728) shown in the main menu's corner
+  const GAME_VERSION = 'v729';   // (v728) shown in the main menu's corner
+  // (v729) the last few errors, kept in this browser and shown under the version, so a player can read them out
+  const ERRN = { list: (() => { try { return JSON.parse(localStorage.getItem('glyph.errs') || '[]'); } catch (e) { return []; } })() };
+  function noteErr(err, where) { try { const m = (err && (err.message || err.reason && err.reason.message || err.reason) || String(err)).toString().slice(0, 160), st = err && err.stack ? String(err.stack).split('\n').find(l => /:\d+:\d+/.test(l)) || '' : '', at = (st.match(/:(\d+):(\d+)\)?\s*$/) || []).slice(1).join(':');
+      const e = { v: GAME_VERSION, w: where, m, at, t: Date.now() }; const L = ERRN.list; if (L.length && L[L.length - 1].m === m && L[L.length - 1].w === where) return; L.push(e); while (L.length > 3) L.shift(); localStorage.setItem('glyph.errs', JSON.stringify(L)); } catch (_) {} }
+  addEventListener('error', e => noteErr(e.error || e.message, 'page'));
+  addEventListener('unhandledrejection', e => noteErr(e.reason, 'promise'));
+  function errLine() { const L = ERRN.list.filter(e => e.v === GAME_VERSION); if (!L.length) return ''; const e = L[L.length - 1]; return `<p class="merr" title="${(e.w + ': ' + e.m).replace(/["<>&]/g, '')}">last error (${e.w}${e.at ? ' @' + e.at : ''}): ${e.m.replace(/[<>&]/g, '')}</p>`; }
   function showMenu() {
     setState('menu'); unlock(); menuSave = null;
     if (!G || !G.menuScene) genMenuScene();
@@ -29228,7 +29236,7 @@ o=]#########=>
         <button class="mbtn" id="quitBtn">Quit Game</button>
       </nav>
       <p class="msave" id="saveNote"></p>
-      <p class="mver" aria-label="Game version">Glyphcrawl ${GAME_VERSION}</p>
+      <p class="mver" aria-label="Game version">Glyphcrawl ${GAME_VERSION}</p>${errLine()}
       <label class="tmode"><input type="checkbox" id="testMode" ${testMode ? 'checked' : ''}> Test mode <span>start in a room of chests holding every item</span></label>
     </div>`;
     document.getElementById('newBtn').onclick = showCreate; setTimeout(campDb, 1500);   // (v684)
@@ -29572,16 +29580,24 @@ o=]#########=>
   }
   // (v684) the kept frames of the figures at the fire
   const CAMPC = { db: null, opening: null, got: new Map(), pend: new Set(), VER: 'c684' };
-  function campDb() { if (WEBKIT) return CAMPC.opening || (CAMPC.opening = Promise.resolve(null)); /* (v727) Safari: no IndexedDB */ if (CAMPC.opening) return CAMPC.opening; CAMPC.opening = new Promise(res => { try { const r = indexedDB.open('glyphcrawl-bake', 1); r.onupgradeneeded = () => { try { r.result.createObjectStore('camp'); } catch (e) { } }; r.onsuccess = () => { CAMPC.db = r.result; res(CAMPC.db); }; r.onerror = () => res(null); r.onblocked = () => res(null); } catch (e) { res(null); } }); return CAMPC.opening; }
+  function campDb() { if (WEBKIT) return CAMPC.opening || (CAMPC.opening = Promise.resolve(null)); /* (v727) Safari: no IndexedDB */ if (CAMPC.opening) return CAMPC.opening; CAMPC.opening = new Promise(res => { setTimeout(() => res(null), 2500); try { const r = indexedDB.open('glyphcrawl-bake', 1); r.onupgradeneeded = () => { try { r.result.createObjectStore('camp'); } catch (e) { } }; r.onsuccess = () => { CAMPC.db = r.result; res(CAMPC.db); }; r.onerror = () => res(null); r.onblocked = () => res(null); } catch (e) { res(null); } }); return CAMPC.opening; }
   const campKey = (F, key) => { const g = F.p.gear || {}, gs = Object.keys(g).sort().map(k => k + ':' + (g[k] && (g[k].name || g[k].family || g[k].kind) || '')).join(','); return [CAMPC.VER, F.cls, F.sub, F.race, F.sex, key.slice(F.pre.length), gs].join('|'); };
   function campPack(d) { const q = a => { const o = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = a[i] < 0 ? 0 : a[i] > 255 ? 255 : a[i] + .5; return o; }, A = new Uint8Array(d.A.length); for (let i = 0; i < A.length; i++) A[i] = Math.round(Math.max(0, Math.min(1, d.A[i])) * 255);
     const o = { ...d, A, Cr: q(d.Cr), Cg: q(d.Cg), Cb: q(d.Cb), packed: 1 }; delete o.mips; return o; }
   function campUnpack(o) { const f = a => Float32Array.from(a), A = new Float32Array(o.A.length); for (let i = 0; i < A.length; i++) A[i] = o.A[i] / 255; const d = { ...o, A, Cr: f(o.Cr), Cg: f(o.Cg), Cb: f(o.Cb) }; delete d.packed; return d; }
   function campFetch(keys) { for (const k of keys) if (!CAMPC.got.has(k)) CAMPC.pend.add(k); const drop = () => { for (const k of keys) CAMPC.pend.delete(k); };
+    setTimeout(drop, 2500);   // (v729) whatever has not come back from the device by then is baked instead
     campDb().then(db => { if (!db) return drop(); try { const st = db.transaction('camp', 'readonly').objectStore('camp'); for (const k of keys) { if (CAMPC.got.has(k)) continue; const r = st.get(k); r.onsuccess = () => { CAMPC.pend.delete(k); if (r.result) { try { CAMPC.got.set(k, campUnpack(r.result)); } catch (e) { } } }; r.onerror = () => CAMPC.pend.delete(k); } } catch (e) { drop(); } }); setTimeout(drop, 2500); }
   function campKeep(k, d) { campDb().then(db => { if (!db) return; try { db.transaction('camp', 'readwrite').objectStore('camp').put(campPack(d), k); } catch (e) { } }); }
   // the seven keep their looks from one visit to the next
   function campLook(cls, race, sex) { try { const L = JSON.parse(localStorage.getItem('glyph.campLook') || '{}'); if (!L[cls]) { L[cls] = { race, sex }; localStorage.setItem('glyph.campLook', JSON.stringify(L)); } return L[cls]; } catch (e) { return { race, sex }; } }
+  // (v729) a bake that throws (now or while it steps) is noted; the plain pose is tried; failing that, a frame the figure has
+  function campSafe(F, key, make, plain) {
+    const borrow = () => { const ks = Object.keys(F.have || {}); const k = ks.find(q => q.endsWith('r0')) || ks[0]; const any = k ? SPR[k] : Object.values(CAMP && CAMP.figs || {}).map(G2 => SPR[G2.pre + 'r0']).find(Boolean); return { step: () => true, def: any || SPR.mgR }; };
+    const guard = (mk, next) => { let j; try { j = mk(); } catch (err) { noteErr(err, 'camp ' + F.cls + ' ' + key.slice(F.pre.length)); return next(); }
+      return { get def() { return j.def; }, step(e) { try { return j.step(e); } catch (err) { noteErr(err, 'camp ' + F.cls + ' ' + key.slice(F.pre.length)); const n = next(); j = n; return n.step(e); } } }; };
+    return guard(make, () => guard(plain, borrow));
+  }
   function campQueue(F, hurry) {
     const C0 = CAMP, plan = campPlan(F); F.have = {};
     campFetch(Object.keys(plan).map(k => campKey(F, k)));
@@ -29590,7 +29606,8 @@ o=]#########=>
       const j = bgJob(() => { const kept = CAMPC.got.get(ck); if (kept) return { step: () => true, def: kept, kept: true };
           if (CAMPC.pend.has(ck)) { const W = { def: null, real: null, step(e) { if (W.real) { const r = W.real.step(e); W.def = W.real.def; return r; } const k2 = CAMPC.got.get(ck); if (k2) { W.def = k2; return true; } if (CAMPC.pend.has(ck)) return false; W.real = bake(); return false; } }; return W; }   // (still being read from the device: wait for it)
           return bake(); }, def => { if (!CAMPC.got.has(ck)) { CAMPC.got.set(ck, def); campKeep(ck, def); } if (CAMP !== C0 || !key.startsWith(F.pre)) return; SPR[key] = o.lie ? lieDef(def) : def; F.have[key] = 1; });
-      const bake = () => { HEAD_NOD = o.nod || 0; HEAD_TURN = o.turn || 0; BODY_LEAN = o.lean || 0; BAKE_TALL = 14;
+      const bake = () => campSafe(F, key, () => bake0(), () => { HEAD_NOD = HEAD_TURN = BODY_LEAN = 0; BAKE_TALL = 14; try { return bakeHeroJob({ ...F.p }, false, -1, o.yaw || 0, undefined, 100); } finally { BAKE_TALL = 0; } });
+      const bake0 = () => { HEAD_NOD = o.nod || 0; HEAD_TURN = o.turn || 0; BODY_LEAN = o.lean || 0; BAKE_TALL = 14;
         try { return bakeHeroJob({ ...F.p, ...(o.bare ? { gear: { ...F.p.gear, weapon: null } } : {}), sit: o.sit[0] || undefined, sitZ: o.sit[0] ? o.sit[1] : undefined }, false, -1, o.yaw, o.pose, 100); } finally { HEAD_NOD = HEAD_TURN = BODY_LEAN = BAKE_TALL = 0; } };
       j.key = key; j.rest = /_r[1-9]\d*$/.test(key); j.fl = /_f\d+$/.test(key); j.hurried = hurry && !j.rest; j.pri = j.hurried ? o.pri - 3 : o.pri; j.camp = F.pre; C0.q.push(j); }   // (v617) its idling frames are not hurried: getting up and its move come first
     C0.q.sort((a, b) => a.pri - b.pri);
@@ -29934,8 +29951,12 @@ o=]#########=>
   function campTick(dt) {
     const C = CAMP; if (!C) return; C.t += dt; const t = C.t;
     // the work of making them: more of the frame while the fog still hides the place
-    { const wait = C.sel && (C.figs[C.sel].mode === 'rise' || C.figs[C.sel].mode === 'atk' || C.figs[C.sel].mode === 'flo'), end = performance.now() + (!C.ready ? (C.fogT > 0 ? 26 : 110) : wait ? (C.figs[C.sel].waitU && C.figs[C.sel].mode === 'rise' ? (COARSE ? 22 : 38) : COARSE ? 14 : 22) : C.spin ? 20 : COARSE ? 8 : 12); while (C.q.length && performance.now() < end) { const j = C.q.shift(), r = j(end); if (typeof r === 'function') { r.pri = -9; r.camp = j.camp; C.q.unshift(r); break; } } }
+    { const wait = C.sel && (C.figs[C.sel].mode === 'rise' || C.figs[C.sel].mode === 'atk' || C.figs[C.sel].mode === 'flo'), end = performance.now() + (!C.ready ? (C.fogT > 0 ? 26 : 110) : wait ? (C.figs[C.sel].waitU && C.figs[C.sel].mode === 'rise' ? (COARSE ? 22 : 38) : COARSE ? 14 : 22) : C.spin ? 20 : COARSE ? 8 : 12); while (C.q.length && performance.now() < end) { const j = C.q.shift(); let r; try { r = j(end); } catch (err) { noteErr(err, 'camp job'); continue; } if (typeof r === 'function') { r.pri = -9; r.camp = j.camp; C.q.unshift(r); break; } } }
     if (!C.ready && Object.values(C.figs).every(F => SPR[F.pre + 'r0'])) C.ready = true;
+    if (!C.ready && campFogAt && performance.now() - campFogAt > 12000) {   // (v729) the fog never waits more than 12 s
+      const any = Object.values(C.figs).map(F => SPR[F.pre + 'r0']).find(Boolean) || SPR.mgR;
+      for (const F of Object.values(C.figs)) if (!SPR[F.pre + 'r0']) { noteErr(new Error('no first frame after 12 s (queue ' + C.q.length + ')'), 'camp ' + F.cls); SPR[F.pre + 'r0'] = any; F.have = F.have || {}; F.have[F.pre + 'r0'] = 1; }
+      C.ready = true; }
     if (C.step === 'browse' && !C.sel && C.ready && C.fogT > .02) campSelect('warrior');   // (v707) the warrior first
     { const want = C.step === 'folk' && C.sel ? RACE_HUE[C.figs[C.sel].race] : null; if (want) C.hueC = want; C.hueK += ((want ? 1 : 0) - C.hueK) * Math.min(1, dt * 2.2);   // (v707) the camp takes the hue of the people chosen
       if (C.hueC && C.hueK > .002) { if (!C.amb0) C.amb0 = AMB.slice(); const L = (C.amb0[0] + C.amb0[1] + C.amb0[2]) / 3 + .03; G.amb = C.amb0.map((v, q) => v + (C.hueC[q] / 255 * L * 2.2 - v) * C.hueK); C.ambSet = true; } else if (C.ambSet) { delete G.amb; C.ambSet = false; C.amb0 = null; } }   // (v640) the fog lifts as soon as all sit at the fire again; their getting up and moves keep being made first after it
@@ -39269,7 +39290,7 @@ o=]#########=>
       const covered = state === 'player' ? (INV3 ? (INV3.anim || INV3.acting ? 1 : 4) : 0) : state === 'company' || state === 'loot' || state === 'ench' || state === 'paused' || state === 'dead' ? 6 : 1;
       { const g = wantGrid(); if (g.rows !== rows || (g[aspect] || g['16:9']) !== cols) resize(); }   // (v727)
       if (covered === 1 || (covered && frameNo % covered === 0) || !render.once || render.lastState !== state) { render(now / 1000); render.once = true; render.lastState = state; }
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); noteErr(err, 'frame ' + state); }
     { const wk = performance.now() - w0; frame.work = (frame.work || wk) * .95 + wk * .05; frame.last = wk; }
     fpsTick(now, now - (fpsTick.prev || now)); fpsTick.prev = now;   // (v704)
     // Auto detail: step down if a frame's work is too heavy for this machine
